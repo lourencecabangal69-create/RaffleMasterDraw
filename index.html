@@ -486,16 +486,47 @@
       measurementId: "G-XCHPLNR2YD"
     };
 
-    // Initialize Firebase
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
     const commentsCollection = collection(db, "raffle_comments");
+    const statsDoc = doc(db, "stats", "global");
 
     // ==========================================
-    // 2. ANTI-SPAM & STATE MANAGEMENT
+    // 2. GLOBAL STATS (Drawn & Eliminated) - LIVE
+    // ==========================================
+    // Real-time listener: updates the DOM whenever the cloud data changes
+    onSnapshot(statsDoc, (snap) => {
+        if (snap.exists()) {
+            const data = snap.data();
+            const drawnEl = document.getElementById('logDrawnCount');
+            const elimEl = document.getElementById('logEliminatedCount');
+            if (drawnEl) drawnEl.textContent = data.drawn || 0;
+            if (elimEl) elimEl.textContent = data.eliminated || 0;
+        }
+    });
+
+    // Expose functions to the main script via window
+    window.incrementDrawn = async () => {
+        try {
+            await setDoc(statsDoc, { drawn: increment(1) }, { merge: true });
+        } catch (err) {
+            console.error("Failed to increment drawn count:", err);
+        }
+    };
+
+    window.incrementEliminated = async () => {
+        try {
+            await setDoc(statsDoc, { eliminated: increment(1) }, { merge: true });
+        } catch (err) {
+            console.error("Failed to increment eliminated count:", err);
+        }
+    };
+
+    // ==========================================
+    // 3. ANTI-SPAM & STATE MANAGEMENT
     // ==========================================
     let lastCommentTime = 0;
-    const COOLDOWN_MS = 10000; // 10 seconds cooldown
+    const COOLDOWN_MS = 10000;
     
     let userId = localStorage.getItem('raffle_user_id');
     if (!userId) {
@@ -507,7 +538,7 @@
     if (savedNick) document.getElementById('feedback-nickname').value = savedNick;
 
     // ==========================================
-    // 3. REAL-TIME LIVE LISTENER
+    // 4. REAL-TIME LIVE LISTENER (Chat)
     // ==========================================
     const q = query(commentsCollection, orderBy("timestamp", "desc"), limit(50));
     onSnapshot(q, (snapshot) => {
@@ -535,7 +566,7 @@
     });
 
     // ==========================================
-    // 4. SUBMIT LOGIC & ANTI-SPAM
+    // 5. SUBMIT LOGIC & ANTI-SPAM
     // ==========================================
     document.getElementById('feedback-submit').addEventListener('click', () => {
         const nickname = document.getElementById('feedback-nickname').value.trim();
@@ -569,7 +600,7 @@
             userId: userId,
             timestamp: serverTimestamp()
         }).then(() => {
-            document.getElementById('feedback-text').value = ''; // Clear input
+            document.getElementById('feedback-text').value = '';
         }).catch(err => {
             console.error("Error posting comment: ", err);
             alert("Failed to send message. Please try again.");
@@ -577,7 +608,6 @@
         });
     });
 
-    // Basic XSS Protection
     function escapeHTML(str) {
         const div = document.createElement('div');
         div.appendChild(document.createTextNode(str));
