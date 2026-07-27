@@ -1585,11 +1585,18 @@
   // ---------------- Init ----------------
   function init(){
     // Activity Logs: Visit Counter (persisted in localStorage)
+        // Activity Logs: Visit Counter (Session-based to prevent refresh spam)
     try {
       let visits = parseInt(localStorage.getItem('rm_visitCount') || '0', 10);
       visits = isNaN(visits) ? 0 : visits;
-      visits++;
-      localStorage.setItem('rm_visitCount', String(visits));
+      
+      // Check if we've already counted this specific browser session
+      if (!sessionStorage.getItem('rm_session_counted')) {
+        visits++;
+        localStorage.setItem('rm_visitCount', String(visits));
+        sessionStorage.setItem('rm_session_counted', 'true'); // Mark session as counted
+      }
+      
       state.visitCount = visits;
     } catch(e) { state.visitCount = 1; }
 
