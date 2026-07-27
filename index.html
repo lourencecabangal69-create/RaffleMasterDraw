@@ -469,13 +469,12 @@
 
 <!-- MODERN FIREBASE ES MODULE (No local files needed) -->
 <!-- MODERN FIREBASE ES MODULE (Uses full HTTPS URLs - No bare specifiers) -->
+<!-- MODERN FIREBASE ES MODULE -->
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
     import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, limit, serverTimestamp, doc, setDoc, increment } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-    // ==========================================
-    // 1. FIREBASE CONFIGURATION (REPLACE THIS WITH YOUR KEYS)
-    // ==========================================
+    // 1. FIREBASE CONFIG (Make sure your actual keys are here!)
     const firebaseConfig = {
         apiKey: "YOUR_API_KEY",
         authDomain: "YOUR_PROJECT.firebaseapp.com",
@@ -490,10 +489,7 @@
     const commentsCollection = collection(db, "raffle_comments");
     const statsDoc = doc(db, "stats", "global");
 
-    // ==========================================
-    // 2. GLOBAL STATS (Drawn & Eliminated) - LIVE
-    // ==========================================
-    // Real-time listener: updates the DOM whenever the cloud data changes
+    // 2. GLOBAL STATS LIVE LISTENER
     onSnapshot(statsDoc, (snap) => {
         if (snap.exists()) {
             const data = snap.data();
@@ -504,105 +500,69 @@
         }
     });
 
-    // Expose functions to the main script via window
+    // 3. EXPOSE FUNCTIONS TO MAIN SCRIPT
     window.incrementDrawn = async () => {
         try {
             await setDoc(statsDoc, { drawn: increment(1) }, { merge: true });
-        } catch (err) {
-            console.error("Failed to increment drawn count:", err);
-        }
+        } catch (err) { console.error("Failed to increment drawn:", err); }
     };
 
     window.incrementEliminated = async () => {
         try {
             await setDoc(statsDoc, { eliminated: increment(1) }, { merge: true });
-        } catch (err) {
-            console.error("Failed to increment eliminated count:", err);
-        }
+        } catch (err) { console.error("Failed to increment eliminated:", err); }
     };
 
-    // ==========================================
-    // 3. ANTI-SPAM & STATE MANAGEMENT
-    // ==========================================
+    // 4. CHAT LOGIC (Anti-spam & Live Comments)
     let lastCommentTime = 0;
     const COOLDOWN_MS = 10000;
-    
-    let userId = localStorage.getItem('raffle_user_id');
-    if (!userId) {
-        userId = 'anon_' + Math.random().toString(36).substr(2, 9);
-        localStorage.setItem('raffle_user_id', userId);
-    }
+    let userId = localStorage.getItem('raffle_user_id') || ('anon_' + Math.random().toString(36).substr(2, 9));
+    localStorage.setItem('raffle_user_id', userId);
 
     const savedNick = localStorage.getItem('raffle_nickname');
     if (savedNick) document.getElementById('feedback-nickname').value = savedNick;
 
-    // ==========================================
-    // 4. REAL-TIME LIVE LISTENER (Chat)
-    // ==========================================
     const q = query(commentsCollection, orderBy("timestamp", "desc"), limit(50));
     onSnapshot(q, (snapshot) => {
         const msgContainer = document.getElementById('feedback-messages');
         msgContainer.innerHTML = '';
-        
         if (snapshot.empty) {
             msgContainer.innerHTML = '<p class="feedback-placeholder">No comments yet. Be the first to drop a message!</p>';
             return;
         }
-
         snapshot.forEach(doc => {
             const data = doc.data();
             const msgDiv = document.createElement('div');
             msgDiv.className = 'feedback-msg';
-            
-            let timeStr = '';
-            if (data.timestamp) {
-                timeStr = data.timestamp.toDate().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-            }
-            
+            let timeStr = data.timestamp ? data.timestamp.toDate().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '';
             msgDiv.innerHTML = `<span class="time">${timeStr}</span><span class="nick">${escapeHTML(data.nickname)}:</span> ${escapeHTML(data.text)}`;
             msgContainer.appendChild(msgDiv);
         });
     });
 
-    // ==========================================
-    // 5. SUBMIT LOGIC & ANTI-SPAM
-    // ==========================================
     document.getElementById('feedback-submit').addEventListener('click', () => {
         const nickname = document.getElementById('feedback-nickname').value.trim();
         const text = document.getElementById('feedback-text').value.trim();
         const submitBtn = document.getElementById('feedback-submit');
         const cooldownMsg = document.getElementById('feedback-cooldown');
 
-        if (!nickname || !text) {
-            alert("Please enter a nickname and a comment.");
-            return;
-        }
-        
+        if (!nickname || !text) return alert("Please enter a nickname and a comment.");
         const now = Date.now();
-        if (now - lastCommentTime < COOLDOWN_MS) {
-            cooldownMsg.style.display = 'block';
-            return;
-        }
+        if (now - lastCommentTime < COOLDOWN_MS) { cooldownMsg.style.display = 'block'; return; }
         cooldownMsg.style.display = 'none';
 
         localStorage.setItem('raffle_nickname', nickname);
         submitBtn.disabled = true;
         lastCommentTime = now;
-        
-        setTimeout(() => {
-            submitBtn.disabled = false;
-        }, COOLDOWN_MS);
+        setTimeout(() => { submitBtn.disabled = false; }, COOLDOWN_MS);
 
         addDoc(commentsCollection, {
-            text: text,
-            nickname: nickname,
-            userId: userId,
-            timestamp: serverTimestamp()
+            text: text, nickname: nickname, userId: userId, timestamp: serverTimestamp()
         }).then(() => {
             document.getElementById('feedback-text').value = '';
         }).catch(err => {
             console.error("Error posting comment: ", err);
-            alert("Failed to send message. Please try again.");
+            alert("Failed to send message.");
             submitBtn.disabled = false;
         });
     });
@@ -1085,6 +1045,7 @@
       runDrawAnimation(pool, loser, function(){
           SoundEngine.eliminate();
           state.eliminatedIds.push(loser.id);
+          if (window.incrementEliminated) window.incrementEliminated(); // <-- ADD THIS
           const banner = document.getElementById('resultBanner');
           banner.textContent = '❌ ' + loser.name + ', You are Eliminated From the Draw';
           banner.className = 'result-banner eliminated show';
@@ -1106,6 +1067,7 @@
       SoundEngine.win();
       state.topWinners[slotIndex] = winner;
       state.drawnCount++;
+      if (window.incrementDrawn) window.incrementDrawn(); // <-- ADD THIS
       showResultBanner(winner.name);
       celebrate();
       showWinnerModal(winner, state.prizes.top[slotIndex]);
@@ -1126,6 +1088,7 @@
       SoundEngine.win();
       state.consolationWinners.push(winner);
       state.drawnCount++;
+      if (window.incrementDrawn) window.incrementDrawn(); // <-- ADD THIS
       showResultBanner(winner.name);
       celebrate();
       showWinnerModal(winner, state.prizes.consolation[slotIndex]);
@@ -1459,10 +1422,8 @@
   }
 
     function renderActivityLogs(){
-    // ⚠️ DO NOT TOUCH logDrawnCount or logEliminatedCount here.
-    // They are now controlled globally by the Firebase module script.
-    // If we update them here, it will overwrite the live cloud data with 0 on every refresh.
-    
+    // ⚠️ DO NOT TOUCH logDrawnCount or logEliminatedCount here!
+    // They are controlled globally by Firebase. Overwriting them here causes the reset bug.
     const visitEl = document.getElementById('logVisitCount');
     if(visitEl) visitEl.textContent = state.visitCount;
   }
