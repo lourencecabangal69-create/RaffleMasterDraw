@@ -472,17 +472,17 @@
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
     import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, limit, serverTimestamp, doc, setDoc, increment } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
     // ==========================================
     // 1. FIREBASE CONFIGURATION (REPLACE THIS WITH YOUR KEYS)
     // ==========================================
     const firebaseConfig = {
-      apiKey: "AIzaSyAqy5XvJKDUxdW7wp5tC2yxE_0hKXrJYvI",
-      authDomain: "raffle-draw-app-alph1tech.firebaseapp.com",
-      projectId: "raffle-draw-app-alph1tech",
-      storageBucket: "raffle-draw-app-alph1tech.firebasestorage.app",
-      messagingSenderId: "422199484986",
-      appId: "1:422199484986:web:5619a9a670bffe246b0b03",
-      measurementId: "G-XCHPLNR2YD"
+        apiKey: "YOUR_API_KEY",
+        authDomain: "YOUR_PROJECT.firebaseapp.com",
+        projectId: "YOUR_PROJECT_ID",
+        storageBucket: "YOUR_PROJECT.appspot.com",
+        messagingSenderId: "123456789",
+        appId: "1:123456789:web:abcdef"
     };
 
     const app = initializeApp(firebaseConfig);
@@ -1458,12 +1458,12 @@
     root.style.setProperty('--win-font-color', state.settings.winFontColor);
   }
 
-  function renderActivityLogs(){
-    const drawnEl = document.getElementById('logDrawnCount');
-    const elimEl = document.getElementById('logEliminatedCount');
+    function renderActivityLogs(){
+    // ⚠️ DO NOT TOUCH logDrawnCount or logEliminatedCount here.
+    // They are now controlled globally by the Firebase module script.
+    // If we update them here, it will overwrite the live cloud data with 0 on every refresh.
+    
     const visitEl = document.getElementById('logVisitCount');
-    if(drawnEl) drawnEl.textContent = state.drawnCount;
-    if(elimEl) elimEl.textContent = state.eliminatedIds.length;
     if(visitEl) visitEl.textContent = state.visitCount;
   }
 
