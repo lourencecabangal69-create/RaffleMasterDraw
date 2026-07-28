@@ -402,9 +402,11 @@
       <div style="display:flex; gap:20px;">
         <div style="text-align:center;"><div style="font-size:10px; color:var(--text-dim);">Drawn</div><span class="count-chip" id="logDrawnCount">0</span></div>
         <div style="text-align:center;"><div style="font-size:10px; color:var(--text-dim);">Eliminated</div><span class="count-chip" id="logEliminatedCount">0</span></div>
-        <div style="text-align:center;"><div style="font-size:10px; color:var(--text-dim);">Visits</div><span class="count-chip" id="logVisitCount">0</span></div>
+        <div style="text-align:center;"><div style="font-size:10px; color:var(--text-dim);">My Visits</div><span class="count-chip" id="logVisitCount">0</span></div>
+        <div style="text-align:center;"><div style="font-size:10px; color:var(--text-dim);">Global Visits</div><span class="count-chip" id="logGlobalVisitCount" style="background:var(--accent); color:var(--accent-contrast);">0</span></div>
       </div>
     </div>
+    <div id="countryStatsContainer" style="padding:0 16px 10px;"></div>
     <a href="https://www.facebook.com/RenzCabangal18/" target="_blank" class="btn btn-primary" style="text-decoration:none; text-align:center; display:inline-flex; align-items:center; justify-content:center; gap:6px; font-size:13px; padding:10px 18px; white-space:nowrap;">📘 Message on Facebook</a>
   </div>
 <!-- ========================================== -->
@@ -496,7 +498,7 @@
 <!-- MODERN FIREBASE ES MODULE -->
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-    import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, limit, serverTimestamp, doc, setDoc, increment } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+    import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, limit, serverTimestamp, doc, setDoc, increment, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
     // 1. FIREBASE CONFIG (Make sure your actual keys are here!)
     const firebaseConfig = {
@@ -513,6 +515,7 @@
     const db = getFirestore(app);
     const commentsCollection = collection(db, "raffle_comments");
     const statsDoc = doc(db, "stats", "global");
+    const visitsDoc = doc(db, "visits", "global");
 
     // 2. GLOBAL STATS LIVE LISTENER
     onSnapshot(statsDoc, (snap) => {
@@ -524,6 +527,96 @@
             if (elimEl) elimEl.textContent = data.eliminated || 0;
         }
     });
+
+    // 2b. GLOBAL VISITS & COUNTRY TRACKING
+    let globalVisitCount = 0;
+    let countryStats = {};
+    
+    // Listen to global visits
+    onSnapshot(visitsDoc, (snap) => {
+        if (snap.exists()) {
+            const data = snap.data();
+            globalVisitCount = data.totalVisits || 0;
+            countryStats = data.countries || {};
+            
+            // Update UI
+            const globalVisitEl = document.getElementById('logGlobalVisitCount');
+            if (globalVisitEl) globalVisitEl.textContent = globalVisitCount.toLocaleString();
+            
+            // Update country list if exists
+            renderCountryStats();
+        } else {
+            // Initialize if doesn't exist
+            setDoc(visitsDoc, { totalVisits: 0, countries: {} }, { merge: true });
+        }
+    });
+
+    // Function to record visit with country detection
+    window.recordGlobalVisit = async () => {
+        try {
+            // Only count once per session
+            if (sessionStorage.getItem('rm_global_visit_counted')) {
+                return;
+            }
+            
+            // Get country info from IP API (free, no key needed for basic usage)
+            let countryCode = 'XX';
+            let countryName = 'Unknown';
+            
+            try {
+                const response = await fetch('https://ipapi.co/json/');
+                if (response.ok) {
+                    const data = await response.json();
+                    countryCode = data.country_code || 'XX';
+                    countryName = data.country_name || 'Unknown';
+                }
+            } catch (e) {
+                console.log('Could not detect country:', e);
+            }
+            
+            // Increment total visits and country count
+            await setDoc(visitsDoc, { 
+                totalVisits: increment(1),
+                countries: {
+                    [countryCode]: increment(1)
+                }
+            }, { merge: true });
+            
+            sessionStorage.setItem('rm_global_visit_counted', 'true');
+        } catch (err) { 
+            console.error("Failed to record global visit:", err); 
+        }
+    };
+
+    // Render country statistics
+    function renderCountryStats() {
+        const container = document.getElementById('countryStatsContainer');
+        if (!container || Object.keys(countryStats).length === 0) return;
+        
+        // Sort countries by count
+        const sorted = Object.entries(countryStats)
+            .filter(([code]) => code !== 'XX')
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 10); // Top 10 countries
+        
+        if (sorted.length === 0) return;
+        
+        let html = '<div style="margin-top:15px;"><div style="font-size:11px; color:var(--text-dim); margin-bottom:8px;">🌍 Top Countries</div><div style="display:flex; flex-wrap:wrap; gap:8px;">';
+        
+        sorted.forEach(([code, count]) => {
+            html += `<span class="count-chip" style="font-size:11px; padding:4px 8px;">${code} 🇺🇳 ${count.toLocaleString()}</span>`;
+        });
+        
+        html += '</div></div>';
+        container.innerHTML = html;
+    }
+
+    // Record visit on load
+    setTimeout(() => {
+        if (window.recordGlobalVisit) {
+            window.recordGlobalVisit();
+        }
+    }, 500);
 
     // 3. EXPOSE FUNCTIONS TO MAIN SCRIPT
     window.incrementDrawn = async () => {
