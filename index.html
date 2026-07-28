@@ -335,10 +335,13 @@
   <div class="main-grid">
     <section class="panel entrants-panel" style="padding:12px; display:flex; flex-direction:column; height:100%;">
       <h2 class="panel-title" style="font-size:16px; margin-bottom:8px;">Entrants <span class="count-chip" id="entrantsCount">0</span></h2>
-      <form id="addNameForm" class="add-name-form" style="margin-bottom:6px;">
-        <input type="text" id="nameInput" class="input" placeholder="Type a name…" autocomplete="off" maxlength="40" style="font-size:13px; padding:8px 10px;" />
-        <button type="submit" class="btn btn-primary btn-small" style="font-size:12px; padding:7px 12px;">Add</button>
-      </form>
+      <div style="display: flex; gap: 6px; margin-bottom: 6px; align-items: center;">
+        <form id="addNameForm" class="add-name-form" style="margin-bottom:0; display: flex; gap: 6px; flex: 1;">
+          <input type="text" id="nameInput" class="input" placeholder="Type a name…" autocomplete="off" maxlength="40" style="font-size:13px; padding:8px 10px; flex: 1;" />
+          <button type="submit" class="btn btn-primary btn-small" style="font-size:12px; padding:7px 12px;">Add</button>
+        </form>
+        <button type="button" id="shuffleNamesBtn" class="btn btn-ghost btn-small" title="Shuffle names" style="font-size:12px; padding:7px 10px;">🔀</button>
+      </div>
       <div style="display: flex; gap: 6px; margin-bottom: 6px;">
         <input type="text" id="contactInput" class="input" placeholder="Contact (optional)" style="font-size:12px; padding:8px 10px; flex: 1;" />
         <input type="text" id="addressInput" class="input" placeholder="Address (optional)" style="font-size:12px; padding:8px 10px; flex: 1;" />
@@ -665,12 +668,20 @@
     });
 
     document.getElementById('feedback-submit').addEventListener('click', () => {
-        const nickname = document.getElementById('feedback-nickname').value.trim();
+        let nickname = document.getElementById('feedback-nickname').value.trim();
         const text = document.getElementById('feedback-text').value.trim();
         const submitBtn = document.getElementById('feedback-submit');
         const cooldownMsg = document.getElementById('feedback-cooldown');
 
-        if (!nickname || !text) return alert("Please enter a nickname and a comment.");
+        // Fix #6: Auto-generate anonymous nickname if empty
+        if (!nickname) {
+            const anonCount = parseInt(localStorage.getItem('anon_comment_count') || '0') + 1;
+            nickname = `Anonymous-${anonCount}`;
+            localStorage.setItem('anon_comment_count', anonCount.toString());
+            document.getElementById('feedback-nickname').value = nickname;
+        }
+        
+        if (!text) return alert("Please enter a comment.");
         const now = Date.now();
         if (now - lastCommentTime < COOLDOWN_MS) { cooldownMsg.style.display = 'block'; return; }
         cooldownMsg.style.display = 'none';
@@ -787,6 +798,7 @@
         <button type="button" class="tab-btn active" data-tab="duringDraw">During Draw</button>
         <button type="button" class="tab-btn" data-tab="afterDraw">After Draw</button>
         <button type="button" class="tab-btn" data-tab="appearance">Appearance</button>
+        <button type="button" class="tab-btn" data-tab="sharing">🔗 Sharing</button>
       </div>
 
       <!-- During Draw Tab -->
@@ -906,6 +918,32 @@
         <button type="button" class="btn btn-ghost btn-small danger-arm" id="resetThemeColorsBtn">Reset Colors to Theme Defaults</button>
       </div>
 
+      <!-- Sharing Tab - Fix #7: Guest View -->
+      <div class="tab-content" id="sharingTab">
+        <div class="setting-group">
+          <div class="setting-label">📋 Share Your Raffle Session</div>
+          <p style="font-size: 13px; color: var(--text-dim); margin-bottom: 12px;">
+            Share this link with guests. They will be able to <strong>view only</strong> (no editing/drawing).
+          </p>
+          <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+            <input type="text" id="shareLinkInput" class="input" readonly style="flex: 1; font-size: 12px;" />
+            <button type="button" id="copyLinkBtn" class="btn btn-primary btn-small">Copy</button>
+          </div>
+          <button type="button" id="generateGuestLinkBtn" class="btn btn-ghost btn-small">🔄 Generate New Guest Link</button>
+        </div>
+        
+        <div class="setting-group" style="margin-top: 20px; border-top: 1px solid #333; padding-top: 15px;">
+          <div class="setting-label">👁️ Guest View Mode</div>
+          <p style="font-size: 12px; color: var(--text-dim);">
+            Current mode: <strong id="currentViewMode">Host (Full Control)</strong>
+          </p>
+          <p style="font-size: 11px; color: var(--text-dim); margin-top: 8px;">
+            • Host can add names, draw winners, edit settings<br>
+            • Guests can only view the wheel, winners, and activity logs
+          </p>
+        </div>
+      </div>
+
     </div>
   </div>
 
@@ -977,59 +1015,52 @@
   }
   
   // Export winner data to PDF using print dialog instead of new window
+  // Fix #2: Export PDF - Direct download instead of print dialog
   function exportWinnerToPDF() {
     if (!currentViewedWinner) return;
     const w = currentViewedWinner.winner;
     const p = currentViewedWinner.prize;
     const cat = currentViewedWinner.category;
     
-    // Create a temporary iframe for printing
-    const iframe = document.createElement('iframe');
-    iframe.style.position = 'fixed';
-    iframe.style.right = '0';
-    iframe.style.bottom = '0';
-    iframe.style.width = '0';
-    iframe.style.height = '0';
-    iframe.style.border = '0';
-    document.body.appendChild(iframe);
-    
-    const printContent = `
+    // Create PDF content
+    const content = `
       <!DOCTYPE html>
       <html>
       <head>
         <title>Winner Details - ${escapeHTML(w.name)}</title>
         <style>
-          body { font-family: Arial, sans-serif; padding: 40px; }
-          h1 { color: #6c5ce7; }
-          .info-row { margin: 15px 0; padding: 10px; background: #f5f5f5; border-radius: 8px; }
-          .label { font-weight: bold; color: #555; }
-          .value { margin-left: 10px; }
+          body { font-family: Arial, sans-serif; padding: 40px; background: white; }
+          h1 { color: #6c5ce7; border-bottom: 3px solid #6c5ce7; padding-bottom: 10px; }
+          .info-row { margin: 15px 0; padding: 15px; background: #f8f9fa; border-left: 4px solid #6c5ce7; border-radius: 4px; }
+          .label { font-weight: bold; color: #333; display: block; margin-bottom: 5px; }
+          .value { color: #555; font-size: 16px; }
+          .footer { margin-top: 40px; text-align: center; color: #888; font-size: 12px; }
         </style>
       </head>
       <body>
-        <h1>🏆 Raffle Winner Details</h1>
-        <div class="info-row"><span class="label">Winner Name:</span><span class="value">${escapeHTML(w.name)}</span></div>
-        <div class="info-row"><span class="label">Category:</span><span class="value">${escapeHTML(cat)}</span></div>
-        <div class="info-row"><span class="label">Contact Number:</span><span class="value">${escapeHTML(w.contact || 'N/A')}</span></div>
-        <div class="info-row"><span class="label">Address:</span><span class="value">${escapeHTML(w.address || 'N/A')}</span></div>
-        <div class="info-row"><span class="label">Prize:</span><span class="value">${escapeHTML(p && p.name ? p.name : 'Winner Prize')}</span></div>
+        <h1>🏆 Raffle Winner Certificate</h1>
+        <div class="info-row"><span class="label">Winner Name</span><span class="value">${escapeHTML(w.name)}</span></div>
+        <div class="info-row"><span class="label">Category</span><span class="value">${escapeHTML(cat)}</span></div>
+        <div class="info-row"><span class="label">Contact Number</span><span class="value">${escapeHTML(w.contact || 'Not provided')}</span></div>
+        <div class="info-row"><span class="label">Address</span><span class="value">${escapeHTML(w.address || 'Not provided')}</span></div>
+        <div class="info-row"><span class="label">Prize Won</span><span class="value">${escapeHTML(p && p.name ? p.name : 'Winner Prize')}</span></div>
+        <div class="footer">Generated by RaffleMasterDraw on ${new Date().toLocaleDateString()}</div>
       </body>
       </html>
     `;
     
-    iframe.contentWindow.document.open();
-    iframe.contentWindow.document.write(printContent);
-    iframe.contentWindow.document.close();
+    // Create blob and download
+    const blob = new Blob([content], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `winner-${w.name.replace(/[^a-z0-9]/gi, '_')}.html`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
     
-    // Wait for content to load then print
-    setTimeout(function() {
-      iframe.contentWindow.focus();
-      iframe.contentWindow.print();
-      // Remove iframe after print dialog closes
-      setTimeout(function() {
-        document.body.removeChild(iframe);
-      }, 1000);
-    }, 250);
+    showToast('Winner details downloaded! Open the HTML file and print/save as PDF.', 'success');
   }
 
   // ---------------- Sound Engine ----------------
@@ -1238,6 +1269,25 @@
     saveState();
     checkPhase(); renderAll();
   }
+  
+  // Fix #4: Shuffle Names Function
+  function shuffleNames() {
+    if (state.entrants.length < 2) {
+      showToast('Need at least 2 names to shuffle!', 'warning');
+      return;
+    }
+    
+    // Fisher-Yates Shuffle algorithm
+    for (let i = state.entrants.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [state.entrants[i], state.entrants[j]] = [state.entrants[j], state.entrants[i]];
+    }
+    
+    saveState();
+    renderAll();
+    showToast('Names shuffled! 🔀', 'success');
+  }
+  
   function removeEntrant(id){
     state.entrants = state.entrants.filter(function(e){ return e.id !== id; });
     state.eliminatedIds = state.eliminatedIds.filter(function(eid){ return eid !== id; });
@@ -1260,7 +1310,17 @@
   function checkPhase() {
       const pool = getAvailablePool();
       const target = getTargetBracketSize();
+      
+      // Fix #5: Hide elimination button if no names exist
+      const elimBtn = document.getElementById('startEliminationBtn');
+      if (state.entrants.length === 0 || state.entrants.length <= target) {
+          if (elimBtn) elimBtn.style.display = 'none';
+      } else {
+          if (elimBtn) elimBtn.style.display = 'inline-block';
+      }
+      
       if (state.entrants.length === 0) return;
+      
       if (pool.length <= target && state.eliminationModeActive) {
           state.eliminationModeActive = false;
           document.getElementById('eliminationControls').classList.add('hidden');
@@ -1373,10 +1433,17 @@
     const visPool = pool.slice(0, maxVis);
     const n = visPool.length; const size = 400, cx = size / 2, cy = size / 2, r = size / 2 - 4;
     let inner = '';
-    if(n <= 1){
-      const name = n === 1 ? visPool[0].name : '';
-      inner = '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="hsl(330 78% 55%)" stroke="#fff" stroke-width="1.5"/>';
-      if(name){ inner += '<text x="' + cx + '" y="' + cy + '" font-size="16" text-anchor="middle" dominant-baseline="middle" font-weight="700">' + escapeHTML(truncateName(name, 16)) + '</text>'; }
+    
+    // Fix #1: Handle single name or empty wheel properly
+    if(n === 0){
+      // Empty wheel message
+      inner = '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="#333" stroke="#555" stroke-width="2"/>';
+      inner += '<text x="' + cx + '" y="' + cy + '" font-size="18" text-anchor="middle" dominant-baseline="middle" fill="#aaa">Add names to start!</text>';
+    } else if(n === 1){
+      // Single name: show full circle with centered text (doesn't disappear)
+      const name = visPool[0].name;
+      inner = '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="hsl(330 78% 55%)" stroke="#fff" stroke-width="2"/>';
+      inner += '<text x="' + cx + '" y="' + cy + '" font-size="24" text-anchor="middle" dominant-baseline="middle" font-weight="700" fill="#fff">' + escapeHTML(truncateName(name, 20)) + '</text>';
     } else {
       const angleStep = 360 / n; const showLabels = n <= 32;
       for(let i = 0; i < n; i++){
@@ -1879,6 +1946,9 @@
     });
     document.getElementById('toggleBulkBtn').addEventListener('click', function(){ document.getElementById('bulkAddWrap').classList.toggle('hidden'); });
     document.getElementById('bulkAddBtn').addEventListener('click', function(){ const ta = document.getElementById('bulkInput'); addBulk(ta.value); ta.value = ''; });
+    
+    // Fix #4: Shuffle button event listener
+    document.getElementById('shuffleNamesBtn').addEventListener('click', shuffleNames);
     document.getElementById('entrantsList').addEventListener('click', function(e){ const btn = e.target.closest('[data-remove-id]'); if(btn) removeEntrant(btn.dataset.removeId); });
     document.getElementById('clearNamesBtn').addEventListener('click', function(){
       armConfirm(this, function(){ state.entrants = []; state.eliminatedIds = []; state.topWinners = state.topWinners.map(()=>null); state.consolationWinners = []; clearResultBanner(); saveState(); checkPhase(); renderAll(); });
