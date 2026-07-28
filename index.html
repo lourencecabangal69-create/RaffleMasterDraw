@@ -1406,6 +1406,11 @@
           if (elimBtn) elimBtn.style.display = 'none';
       } else {
           if (elimBtn) elimBtn.style.display = 'inline-block';
+          // For guests, keep it visible but disabled
+          if (state.isGuest && elimBtn) {
+              elimBtn.disabled = true;
+              elimBtn.title = 'Only the host can control elimination';
+          }
       }
       
       if (state.entrants.length === 0) return;
@@ -1942,7 +1947,7 @@
 
     const drawBtn = document.getElementById('drawTopBtn'); const nextSlot = nextEmptyTopSlot(); const allFilled = nextSlot === -1;
     drawBtn.textContent = allFilled ? 'All Places Filled' : ('Draw ' + ordinal(nextSlot + 1) + ' Place');
-    drawBtn.disabled = state.isDrawing || allFilled || getAvailablePool().length === 0 || state.eliminationModeActive;
+    drawBtn.disabled = state.isGuest || state.isDrawing || allFilled || getAvailablePool().length === 0 || state.eliminationModeActive;
   }
 
   function renderConsolation(){
@@ -1965,7 +1970,7 @@
 
     const drawBtn = document.getElementById('drawConsolationBtn'); const limitReached = state.consolationWinners.length >= state.consolationLimit;
     drawBtn.textContent = !state.consolationEnabled ? 'Enable Consolation First' : (limitReached ? 'Limit Reached' : 'Draw Consolation');
-    drawBtn.disabled = !state.consolationEnabled || state.isDrawing || limitReached || getAvailablePool().length === 0 || state.eliminationModeActive;
+    drawBtn.disabled = state.isGuest || !state.consolationEnabled || state.isDrawing || limitReached || getAvailablePool().length === 0 || state.eliminationModeActive;
   }
 
   function updateThemeButtons(){
@@ -2048,10 +2053,16 @@
     });
     document.getElementById('topSlotsInput').addEventListener('change', function(e){ setTopSlots(parseInt(e.target.value, 10) || 1); e.target.value = state.topSlots; });
     
-    // Draw Trigger Buttons
-    document.getElementById('startEliminationBtn').addEventListener('click', startEliminationPhase);
-    document.getElementById('drawTopBtn').addEventListener('click', drawTopWinner);
-    document.getElementById('topWinnersList').addEventListener('click', function(e){ const c = e.target.closest('[data-clear-top]'); if(c) clearTopSlot(parseInt(c.dataset.clearTop, 10)); });
+    // Draw Trigger Buttons - Only active for host
+    document.getElementById('startEliminationBtn').addEventListener('click', function() {
+      if (state.isGuest) return; // Block guest clicks
+      startEliminationPhase();
+    });
+    document.getElementById('drawTopBtn').addEventListener('click', function() {
+      if (state.isGuest) return; // Block guest clicks
+      drawTopWinner();
+    });
+    document.getElementById('topWinnersList').addEventListener('click', function(e){ const c = e.target.closest('[data-clear-top]'); if(c) { if(state.isGuest) return; clearTopSlot(parseInt(c.dataset.clearTop, 10)); } });
     
     // Prize Inputs
     document.getElementById('topWinnersList').addEventListener('input', function(e){
@@ -2071,8 +2082,11 @@
       e.target.value = v; checkPhase(); renderAll();
     });
     
-    document.getElementById('drawConsolationBtn').addEventListener('click', drawConsolationWinner);
-    document.getElementById('consolationList').addEventListener('click', function(e){ const x = e.target.closest('[data-remove-consolation]'); if(x) removeConsolation(x.dataset.removeConsolation); });
+    document.getElementById('drawConsolationBtn').addEventListener('click', function() {
+      if (state.isGuest) return; // Block guest clicks
+      drawConsolationWinner();
+    });
+    document.getElementById('consolationList').addEventListener('click', function(e){ const x = e.target.closest('[data-remove-consolation]'); if(x) { if(state.isGuest) return; removeConsolation(x.dataset.removeConsolation); } });
     
     document.getElementById('consolationList').addEventListener('input', function(e){
         if(e.target.classList.contains('prize-name-input')) { const idx = e.target.dataset.consPrize; if(!state.prizes.consolation[idx]) state.prizes.consolation[idx] = {}; state.prizes.consolation[idx].name = e.target.value; }
@@ -2084,11 +2098,15 @@
         }
     });
 
-    document.getElementById('clearConsolationBtn').addEventListener('click', function(){ armConfirm(this, function(){ state.consolationWinners = []; saveState(); renderAll(); }); });
+    document.getElementById('clearConsolationBtn').addEventListener('click', function(){ 
+      if (state.isGuest) return; // Block guest clicks
+      armConfirm(this, function(){ state.consolationWinners = []; saveState(); renderAll(); }); 
+    });
     document.getElementById('resetWinnersBtn').addEventListener('click', function(){
+      if (state.isGuest) return; // Block guest clicks
       armConfirm(this, function(){ state.topWinners = state.topWinners.map(()=>null); state.consolationWinners = []; state.eliminatedIds = []; clearResultBanner(); saveState(); checkPhase(); renderAll(); });
     });
-    document.getElementById('themeSwitcher').addEventListener('click', function(e){ const btn = e.target.closest('.theme-btn'); if(btn) setTheme(btn.dataset.theme); });
+    document.getElementById('themeSwitcher').addEventListener('click', function(e){ const btn = e.target.closest('.theme-btn'); if(btn && !state.isGuest) setTheme(btn.dataset.theme); });
 
 
     
