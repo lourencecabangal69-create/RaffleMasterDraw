@@ -848,6 +848,62 @@
       console.error('Failed to save state:', e);
     }
   }
+  
+  // Export winner data to PDF using print dialog instead of new window
+  function exportWinnerToPDF() {
+    if (!currentViewedWinner) return;
+    const w = currentViewedWinner.winner;
+    const p = currentViewedWinner.prize;
+    const cat = currentViewedWinner.category;
+    
+    // Create a temporary iframe for printing
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    document.body.appendChild(iframe);
+    
+    const printContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Winner Details - ${escapeHTML(w.name)}</title>
+        <style>
+          body { font-family: Arial, sans-serif; padding: 40px; }
+          h1 { color: #6c5ce7; }
+          .info-row { margin: 15px 0; padding: 10px; background: #f5f5f5; border-radius: 8px; }
+          .label { font-weight: bold; color: #555; }
+          .value { margin-left: 10px; }
+        </style>
+      </head>
+      <body>
+        <h1>🏆 Raffle Winner Details</h1>
+        <div class="info-row"><span class="label">Winner Name:</span><span class="value">${escapeHTML(w.name)}</span></div>
+        <div class="info-row"><span class="label">Category:</span><span class="value">${escapeHTML(cat)}</span></div>
+        <div class="info-row"><span class="label">Contact Number:</span><span class="value">${escapeHTML(w.contact || 'N/A')}</span></div>
+        <div class="info-row"><span class="label">Address:</span><span class="value">${escapeHTML(w.address || 'N/A')}</span></div>
+        <div class="info-row"><span class="label">Prize:</span><span class="value">${escapeHTML(p && p.name ? p.name : 'Winner Prize')}</span></div>
+      </body>
+      </html>
+    `;
+    
+    iframe.contentWindow.document.open();
+    iframe.contentWindow.document.write(printContent);
+    iframe.contentWindow.document.close();
+    
+    // Wait for content to load then print
+    setTimeout(function() {
+      iframe.contentWindow.focus();
+      iframe.contentWindow.print();
+      // Remove iframe after print dialog closes
+      setTimeout(function() {
+        document.body.removeChild(iframe);
+      }, 1000);
+    }, 250);
+  }
 
   // ---------------- Sound Engine ----------------
   const SoundEngine = (function() {
@@ -1479,43 +1535,6 @@
     
     modal.classList.add('show');
     renderAll(); // Re-render to show the VIEWED badge
-  }
-  
-  // Export winner data to PDF (simple print-based approach)
-  function exportWinnerToPDF() {
-    if (!currentViewedWinner) return;
-    const w = currentViewedWinner.winner;
-    const p = currentViewedWinner.prize;
-    const cat = currentViewedWinner.category;
-    
-    const printContent = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Winner Details - ${escapeHTML(w.name)}</title>
-        <style>
-          body { font-family: Arial, sans-serif; padding: 40px; }
-          h1 { color: #6c5ce7; }
-          .info-row { margin: 15px 0; padding: 10px; background: #f5f5f5; border-radius: 8px; }
-          .label { font-weight: bold; color: #555; }
-          .value { margin-left: 10px; }
-        </style>
-      </head>
-      <body>
-        <h1>🏆 Raffle Winner Details</h1>
-        <div class="info-row"><span class="label">Winner Name:</span><span class="value">${escapeHTML(w.name)}</span></div>
-        <div class="info-row"><span class="label">Category:</span><span class="value">${escapeHTML(cat)}</span></div>
-        <div class="info-row"><span class="label">Contact Number:</span><span class="value">${escapeHTML(w.contact || 'N/A')}</span></div>
-        <div class="info-row"><span class="label">Address:</span><span class="value">${escapeHTML(w.address || 'N/A')}</span></div>
-        <div class="info-row"><span class="label">Prize:</span><span class="value">${escapeHTML(p && p.name ? p.name : 'Winner Prize')}</span></div>
-        <script>window.onload = function() { window.print(); }</script>
-      </body>
-      </html>
-    `;
-    
-    const printWindow = window.open('', '_blank');
-    printWindow.document.write(printContent);
-    printWindow.document.close();
   }
   
   // Export winner data to Excel (CSV format)
