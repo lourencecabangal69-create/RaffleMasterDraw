@@ -619,35 +619,45 @@
         <img src="" id="detailsPrizeImg" class="winner-prize-img hidden" alt="Prize">
       </div>
       
-      <!-- Edit Section -->
-      <div class="edit-section" style="background: rgba(255,255,255,0.05); padding: 16px; border-radius: 8px; margin: 16px 0;">
-        <h4 style="margin-top: 0; color: var(--accent1);">✏️ Edit Information</h4>
-        <div class="form-group" style="margin-bottom: 12px;">
-          <label for="editContact" style="display: block; margin-bottom: 6px; color: var(--text-light);">📞 Contact Number</label>
-          <input type="text" id="editContact" placeholder="Enter contact number" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-secondary); color: var(--text-light);">
+      <!-- View Mode (Default) -->
+      <div id="winnerViewMode">
+        <div class="winner-info-row">
+          <span class="winner-info-label">📞 Contact Number</span>
+          <span class="winner-info-value" id="detailsContact">N/A</span>
         </div>
-        <div class="form-group" style="margin-bottom: 12px;">
-          <label for="editAddress" style="display: block; margin-bottom: 6px; color: var(--text-light);">📍 Address</label>
-          <textarea id="editAddress" placeholder="Enter address" rows="3" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-secondary); color: var(--text-light); resize: vertical;"></textarea>
+        <div class="winner-info-row">
+          <span class="winner-info-label">📍 Address</span>
+          <span class="winner-info-value" id="detailsAddress">N/A</span>
         </div>
-        <button type="button" class="btn btn-primary" id="saveInfoBtn" style="width: 100%;">💾 Save Changes</button>
-        <span id="saveStatus" style="display: block; text-align: center; margin-top: 8px; color: #4ade80; display: none;">✓ Saved successfully!</span>
+        <div class="winner-info-row">
+          <span class="winner-info-label">🏆 Prize Category</span>
+          <span class="winner-info-value" id="detailsCategory">Top Winner</span>
+        </div>
+        <button type="button" class="btn btn-primary" id="editDetailsBtn" style="margin-top: 16px; width: 100%; background: var(--accent2); color: var(--text-contrast);">✏️ Edit Details</button>
       </div>
-      
+
+      <!-- Edit Mode (Hidden by default) -->
+      <div id="winnerEditMode" style="display: none;">
+        <div class="edit-section" style="background: rgba(255,255,255,0.05); padding: 16px; border-radius: 8px; margin: 16px 0;">
+          <h4 style="margin-top: 0; color: var(--accent1);">✏️ Edit Information</h4>
+          <div class="form-group" style="margin-bottom: 12px;">
+            <label for="editContact" style="display: block; margin-bottom: 6px; color: var(--text-light);">📞 Contact Number</label>
+            <input type="text" id="editContact" placeholder="Enter contact number" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-secondary); color: var(--text-light);">
+          </div>
+          <div class="form-group" style="margin-bottom: 12px;">
+            <label for="editAddress" style="display: block; margin-bottom: 6px; color: var(--text-light);">📍 Address</label>
+            <textarea id="editAddress" placeholder="Enter address" rows="3" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-secondary); color: var(--text-light); resize: vertical;"></textarea>
+          </div>
+          <div style="display: flex; gap: 10px;">
+            <button type="button" class="btn btn-primary" id="saveInfoBtn" style="flex: 1; background: #4ade80;">💾 Save Changes</button>
+            <button type="button" class="btn" id="cancelEditBtn" style="flex: 1; background: var(--surface-alt);">Cancel</button>
+          </div>
+          <span id="saveStatus" style="display: block; text-align: center; margin-top: 8px; color: #4ade80; display: none;">✓ Saved successfully!</span>
+        </div>
+      </div>
+
       <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 16px 0;">
       
-      <div class="winner-info-row">
-        <span class="winner-info-label">📞 Contact Number</span>
-        <span class="winner-info-value" id="detailsContact">N/A</span>
-      </div>
-      <div class="winner-info-row">
-        <span class="winner-info-label">📍 Address</span>
-        <span class="winner-info-value" id="detailsAddress">N/A</span>
-      </div>
-      <div class="winner-info-row">
-        <span class="winner-info-label">🏆 Prize Category</span>
-        <span class="winner-info-value" id="detailsCategory">Top Winner</span>
-      </div>
       <div id="viewedBadgeContainer" style="text-align: center; margin-top: 10px;"></div>
       <div class="export-actions">
         <button type="button" class="btn-export" id="exportPDFBtn">📄 Export PDF</button>
@@ -1556,8 +1566,24 @@
     const badgeContainer = document.getElementById('viewedBadgeContainer');
     badgeContainer.innerHTML = '<span class="viewed-badge">✓ VIEWED IN THIS SESSION</span>';
     
+    // Reset to view mode
+    document.getElementById('winnerViewMode').style.display = 'block';
+    document.getElementById('winnerEditMode').style.display = 'none';
+    
     modal.classList.add('show');
     renderAll(); // Re-render to show the VIEWED badge
+  }
+  
+  // Enable edit mode
+  function enableEditMode() {
+    document.getElementById('winnerViewMode').style.display = 'none';
+    document.getElementById('winnerEditMode').style.display = 'block';
+  }
+  
+  // Cancel edit mode
+  function cancelEdit() {
+    document.getElementById('winnerViewMode').style.display = 'block';
+    document.getElementById('winnerEditMode').style.display = 'none';
   }
   
   // Save edited winner information
@@ -1583,6 +1609,9 @@
     // Update display
     document.getElementById('detailsContact').textContent = newContact || 'N/A';
     document.getElementById('detailsAddress').textContent = newAddress || 'N/A';
+    
+    // Switch back to view mode
+    cancelEdit();
     
     // Show success message
     const statusEl = document.getElementById('saveStatus');
@@ -1833,9 +1862,19 @@
       document.getElementById('winnerDetailsModal').classList.remove('show');
     });
     
+    // Edit Details Button - Show edit mode
+    document.getElementById('editDetailsBtn').addEventListener('click', function() {
+      enableEditMode();
+    });
+    
     // Save Info Button
     document.getElementById('saveInfoBtn').addEventListener('click', function() {
       saveWinnerInfo();
+    });
+    
+    // Cancel Edit Button
+    document.getElementById('cancelEditBtn').addEventListener('click', function() {
+      cancelEdit();
     });
     
     // Export PDF
