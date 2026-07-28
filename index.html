@@ -2152,6 +2152,7 @@
       const startElimBtn = document.getElementById('startElimBtn');
       const openSettingsBtn = document.getElementById('openSettingsBtn');
       const deleteEntrantBtns = document.querySelectorAll('.delete-entrant');
+      const themeButtons = document.querySelectorAll('.theme-btn');
 
       if (addNameForm) addNameForm.style.display = 'none';
       if (shuffleBtn) shuffleBtn.style.display = 'none';
@@ -2159,6 +2160,11 @@
       if (startDrawBtn) startDrawBtn.style.display = 'none';
       if (startElimBtn) startElimBtn.style.display = 'none';
       if (openSettingsBtn) openSettingsBtn.style.display = 'none';
+      
+      // Hide theme selector buttons for guests
+      themeButtons.forEach(function(btn) {
+        btn.style.display = 'none';
+      });
       
       // Update view mode display
       if (currentViewModeEl) {
