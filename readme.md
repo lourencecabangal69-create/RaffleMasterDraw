@@ -69,7 +69,97 @@ To enable the real-time chat widget, you need a free Firebase backend.
 4. Find the `<script type="module">` section near the bottom and replace the placeholder keys in `firebaseConfig` with your actual keys.
 5. Go to **Build > Firestore Database** in Firebase, click **Create Database**, and start in **Production Mode**.
 6. Go to the **Rules** tab in Firestore and paste the following to enforce anti-spam:
-   ```javascript
+   ```
+
+---
+
+## 👁️ Guest View Mode
+
+Share your raffle session with others while maintaining full control!
+
+### How to Use Guest View:
+1. Click the **⚙️ Settings** button in the top-right corner
+2. Navigate to the **"Sharing"** tab
+3. Click **"🔄 Generate New Guest Link"**
+4. Click **"Copy"** to copy the guest link
+5. Share the link with your audience
+
+### Guest Permissions:
+✅ **Can Do:**
+- View the wheel/spinning animation in real-time
+- See all winners and activity logs
+- Post comments and shoutouts in Live Feedback
+
+❌ **Cannot Do:**
+- Add or remove names
+- Start draws or elimination rounds
+- Change settings or themes
+- Delete entries
+
+Guests access the session via a special URL parameter (`?session=ID&role=guest`) that automatically restricts their controls while keeping them engaged with the live draw!
+
+---
+
+## 📋 Changelog
+
+### Version 2.0 - Latest Update
+**🎉 Major Features:**
+- **Guest View Mode**: Share session links with view-only access for audiences
+- **Guest Commenting**: Guests can post in Live Feedback & Shoutouts
+- **Anonymous Nicknames**: Auto-generates "Anonymous-1", "Anonymous-2" for users without nicknames
+- **Shuffle Button**: Manually randomize the entrant list with Fisher-Yates algorithm
+- **Improved Animations**: Smooth fast-to-slow deceleration for all theme spins
+- **PDF Export Fix**: Downloads HTML file instead of just opening print dialog
+- **Single Name Fix**: Names no longer disappear when only one is on the Color Wheel
+- **Start Elimination Fix**: Button properly hides on empty lists after refresh
+- **Session-Based Data Isolation**: Each user gets unique data (Option A)
+- **Global Visitor Counter**: Track total visits from all users worldwide
+- **Country Tracking**: Display top 10 visitor countries with flag emojis
+- **Winner Details Modal**: Click winner names to view contact, address, and prize info
+- **Edit Winner Details**: Update winner contact/address from the modal
+- **Export to Excel**: Download winner data as CSV file
+- **Enhanced Favicon Support**: Multiple sizes for all devices (16x16 to 512x512)
+
+**🐛 Bug Fixes:**
+- Fixed single name disappearing on Color Wheel theme
+- Fixed PDF export opening print dialog instead of downloading
+- Fixed "Start Elimination" button appearing on empty lists
+- Fixed duplicate function conflicts
+- Fixed new tab opening issue when adding names
+
+**⚡ Performance Improvements:**
+- Optimized spin animations with cubic-bezier easing
+- Reduced Firebase read/write operations
+- Improved session storage management
+
+### Version 1.5 - Previous Updates
+- Added Contact Number and Address fields for entrants
+- Implemented session-based winner view tracking with "VIEWED" badges
+- Added winner details modal with prize images
+- Export functionality (PDF/Excel)
+- Activity Logs with visit counters
+- Theme customization options
+
+### Version 1.0 - Initial Release
+- 4 animated themes (Color Wheel, Slot Machine, Raffle Drum, Ticket Draw)
+- Elimination phase and consolation prizes
+- Live Feedback chat with Firebase
+- Sound effects using Web Audio API
+- Prize management with image uploads
+
+---
+
+## 📄 License
+Free to use for personal and commercial projects. Attribution appreciated but not required.
+
+## 🤝 Support
+For issues, questions, or feature requests, please visit our [GitHub Repository](https://github.com/lourencecabangal69-create/RaffleMasterDraw).
+
+---
+
+Made with ❤️ by **Renz Cabangal**
+
+```javascript
    rules_version = '2';
    service cloud.firestore {
      match /databases/{database}/documents {
