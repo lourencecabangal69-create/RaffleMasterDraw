@@ -707,6 +707,74 @@
         div.appendChild(document.createTextNode(str));
         return div.innerHTML;
     }
+ // --- GUEST MODE REAL-TIME SYNC FIX ---
+if (isGuest) {
+    console.log("👤 Guest Mode Active: Syncing with session", sessionId);
+
+    // 1. Sync Settings (Theme, Current List, Spin State)
+    const guestSettingsRef = doc(db, "settings", sessionId);
+    onSnapshot(guestSettingsRef, (snap) => {
+        if (snap.exists()) {
+            const data = snap.data();
+            // Update Theme
+            if (data.theme) {
+                currentTheme = data.theme;
+                applyTheme(currentTheme);
+            }
+            // Update Names List
+            if (data.names) {
+                names = data.names;
+                buildWheelSVG(); // Re-build wheel immediately
+            }
+            // Update Spin State (if host is spinning)
+            if (data.isSpinning) {
+                // Trigger visual spin if not already spinning
+                if (!isSpinning) startSpinAnimation(); 
+            }
+        }
+    });
+
+    // 2. Sync Draw Results (Winners)
+    const guestResultsRef = collection(db, "drawResults", sessionId, "results");
+    onSnapshot(guestResultsRef, (snapshot) => {
+        const results = [];
+        snapshot.forEach(doc => results.push(doc.data()));
+        // Sort by timestamp
+        results.sort((a, b) => b.timestamp - a.timestamp);
+        
+        // Update UI
+        const logList = document.getElementById('logList');
+        if (logList) {
+            logList.innerHTML = '';
+            results.forEach(r => {
+                const li = document.createElement('li');
+                li.textContent = `🏆 ${r.winner} won ${r.prize}`;
+                logList.appendChild(li);
+            });
+        }
+        
+        // Update Winner Display
+        const winnerDisplay = document.getElementById('winnerDisplay');
+        if (winnerDisplay && results.length > 0) {
+            winnerDisplay.textContent = results[0].winner;
+            winnerDisplay.classList.add('pop');
+            setTimeout(() => winnerDisplay.classList.remove('pop'), 500);
+        }
+    });
+
+    // 3. Hide Controls for Guest
+    document.querySelectorAll('.host-only-control').forEach(el => el.style.display = 'none');
+    document.getElementById('addNameForm')?.style.setProperty('display', 'none', 'important');
+    document.getElementById('themeSelector')?.style.setProperty('display', 'none', 'important');
+    document.getElementById('shuffleBtn')?.style.setProperty('display', 'none', 'important');
+    
+    // Show Guest Indicator
+    const indicator = document.createElement('div');
+    indicator.id = 'guestIndicator';
+    indicator.style.cssText = 'position:fixed; top:10px; right:10px; background:#ff4757; color:white; padding:5px 10px; border-radius:5px; font-weight:bold; z-index:9999;';
+    indicator.textContent = '👁️ Guest View (Read-Only + Comments)';
+    document.body.appendChild(indicator);
+}
 </script>
   <!-- Winner Display Modal -->
   <div id="winnerModal" class="modal-overlay">
