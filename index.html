@@ -233,6 +233,8 @@
 
   .winner-name.clickable-winner { cursor: pointer; text-decoration: underline; text-decoration-color: var(--accent); text-underline-offset: 3px; }
   .winner-name.clickable-winner:hover { color: var(--accent); }
+  body.is-guest-mode .winner-name.clickable-winner { cursor: default; text-decoration: none; }
+  body.is-guest-mode .winner-name.clickable-winner:hover { color: var(--text); }
   
   .elimination-modal .pop-animation { border-color: var(--accent); }
   .elimination-modal h2 { font-family: var(--font-display); font-size: 32px; color: var(--accent); margin-bottom: 20px;}
@@ -1828,8 +1830,8 @@
       const isWinner = winners.has(e.id); const isEliminated = state.eliminatedIds.includes(e.id);
       let classes = 'entrant-row' + (isWinner ? ' is-winner' : '') + (isEliminated ? ' is-eliminated' : '');
       let tag = isWinner ? '<span class="entrant-tag">drawn</span>' : (isEliminated ? '<span class="entrant-tag eliminated-tag">eliminated</span>' : '');
-      return '<li class="' + classes + '"><span class="entrant-name">' + escapeHTML(e.name) + '</span>' + tag +
-        '<button type="button" class="icon-btn" data-remove-id="' + e.id + '" title="Remove">✕</button></li>';
+      const removeBtn = state.isGuest ? '' : '<button type="button" class="icon-btn" data-remove-id="' + e.id + '" title="Remove">✕</button>';
+      return '<li class="' + classes + '"><span class="entrant-name">' + escapeHTML(e.name) + '</span>' + tag + removeBtn + '</li>';
     }).join('');
   }
 
@@ -1840,14 +1842,15 @@
       const prizeInfo = state.prizes.top[i] || {name: ''};
       const isViewed = w ? sessionStorage.getItem(SESSION_STORAGE_KEY + '_top_' + i) : false;
       const viewedBadge = isViewed ? '<span class="viewed-badge">VIEWED</span>' : '';
+      const clearBtn = state.isGuest ? '' : (w ? '<button type="button" class="icon-btn" data-clear-top="' + i + '" title="Clear Winner">✕</button>' : '');
       return '<li class="winner-slot ' + (w ? 'filled' : 'empty') + '"><div class="winner-header">' + 
           '<span class="place-badge">' + medal + '<span class="place-num">' + String(place).padStart(2, '0') + '</span></span>' +
           '<span class="winner-name ' + (w ? 'clickable-winner' : 'placeholder') + '" ' + (w ? 'data-view-winner="top" data-winner-idx="' + i + '"' : '') + '>' + (w ? escapeHTML(w.name) : 'Not drawn yet') + '</span>' +
           viewedBadge +
-          '<span class="slot-actions">' + (w ? '<button type="button" class="icon-btn" data-clear-top="' + i + '" title="Clear Winner">✕</button>' : '') + '</span>' +
+          '<span class="slot-actions">' + clearBtn + '</span>' +
         '</div><div class="prize-config">' +
-          '<input type="text" class="input prize-name-input" data-top-prize="' + i + '" placeholder="Prize Details" value="' + escapeHTML(prizeInfo.name || '') + '">' +
-          '<input type="file" class="prize-img-input" data-top-img="' + i + '" accept="image/*">' +
+          '<input type="text" class="input prize-name-input" data-top-prize="' + i + '" placeholder="Prize Details" value="' + escapeHTML(prizeInfo.name || '') + '" ' + (state.isGuest ? 'disabled' : '') + '>' +
+          '<input type="file" class="prize-img-input" data-top-img="' + i + '" accept="image/*" ' + (state.isGuest ? 'disabled' : '') + '>' +
         '</div></li>';
     }).join('');
 
@@ -1862,13 +1865,14 @@
         const w = state.consolationWinners[i]; const prizeInfo = state.prizes.consolation[i] || {name: ''};
         const isViewed = w ? sessionStorage.getItem(SESSION_STORAGE_KEY + '_cons_' + i) : false;
         const viewedBadge = isViewed ? '<span class="viewed-badge">VIEWED</span>' : '';
+        const removeBtn = state.isGuest ? '' : (w ? '<button type="button" class="icon-btn" data-remove-consolation="' + w.id + '" title="Remove">✕</button>' : '');
         slotsHtml += '<li class="winner-slot ' + (w ? 'filled consolation' : 'empty') + '"><div class="winner-header">' + 
             '<span class="winner-name ' + (w ? 'clickable-winner' : 'placeholder') + '" ' + (w ? 'data-view-winner="cons" data-winner-idx="' + i + '"' : '') + '>' + (w ? escapeHTML(w.name) : 'Consolation slot') + '</span>' +
             viewedBadge +
-            '<span class="slot-actions">' + (w ? '<button type="button" class="icon-btn" data-remove-consolation="' + w.id + '" title="Remove">✕</button>' : '') + '</span>' +
+            '<span class="slot-actions">' + removeBtn + '</span>' +
           '</div><div class="prize-config">' +
-            '<input type="text" class="input prize-name-input" data-cons-prize="' + i + '" placeholder="Prize Name" value="' + escapeHTML(prizeInfo.name || '') + '">' +
-            '<input type="file" class="prize-img-input" data-cons-img="' + i + '" accept="image/*">' +
+            '<input type="text" class="input prize-name-input" data-cons-prize="' + i + '" placeholder="Prize Name" value="' + escapeHTML(prizeInfo.name || '') + '" ' + (state.isGuest ? 'disabled' : '') + '>' +
+            '<input type="file" class="prize-img-input" data-cons-img="' + i + '" accept="image/*" ' + (state.isGuest ? 'disabled' : '') + '>' +
           '</div></li>';
     }
     el.innerHTML = !state.consolationEnabled ? '<li class="empty-row">Enable to set consolation prizes.</li>' : slotsHtml;
@@ -1953,7 +1957,7 @@
     
     // Fix #4: Shuffle button event listener
     document.getElementById('shuffleNamesBtn').addEventListener('click', shuffleNames);
-    document.getElementById('entrantsList').addEventListener('click', function(e){ const btn = e.target.closest('[data-remove-id]'); if(btn) removeEntrant(btn.dataset.removeId); });
+    document.getElementById('entrantsList').addEventListener('click', function(e){ const btn = e.target.closest('[data-remove-id]'); if(btn && !state.isGuest) removeEntrant(btn.dataset.removeId); });
     document.getElementById('clearNamesBtn').addEventListener('click', function(){
       armConfirm(this, function(){ state.entrants = []; state.eliminatedIds = []; state.topWinners = state.topWinners.map(()=>null); state.consolationWinners = []; clearResultBanner(); saveState(); checkPhase(); renderAll(); });
     });
@@ -1962,14 +1966,14 @@
     // Draw Trigger Buttons
     document.getElementById('startEliminationBtn').addEventListener('click', startEliminationPhase);
     document.getElementById('drawTopBtn').addEventListener('click', drawTopWinner);
-    document.getElementById('topWinnersList').addEventListener('click', function(e){ const c = e.target.closest('[data-clear-top]'); if(c) clearTopSlot(parseInt(c.dataset.clearTop, 10)); });
+    document.getElementById('topWinnersList').addEventListener('click', function(e){ const c = e.target.closest('[data-clear-top]'); if(c && !state.isGuest) clearTopSlot(parseInt(c.dataset.clearTop, 10)); });
     
     // Prize Inputs
     document.getElementById('topWinnersList').addEventListener('input', function(e){
-        if(e.target.classList.contains('prize-name-input')) { const idx = e.target.dataset.topPrize; if(!state.prizes.top[idx]) state.prizes.top[idx] = {}; state.prizes.top[idx].name = e.target.value; }
+        if(e.target.classList.contains('prize-name-input') && !state.isGuest) { const idx = e.target.dataset.topPrize; if(!state.prizes.top[idx]) state.prizes.top[idx] = {}; state.prizes.top[idx].name = e.target.value; }
     });
     document.getElementById('topWinnersList').addEventListener('change', function(e){
-        if(e.target.classList.contains('prize-img-input')) {
+        if(e.target.classList.contains('prize-img-input') && !state.isGuest) {
             const idx = e.target.dataset.topImg;
             readImageFile(e.target.files[0], function(dataStr) { if(!state.prizes.top[idx]) state.prizes.top[idx] = {}; state.prizes.top[idx].image = dataStr; });
         }
@@ -1983,13 +1987,13 @@
     });
     
     document.getElementById('drawConsolationBtn').addEventListener('click', drawConsolationWinner);
-    document.getElementById('consolationList').addEventListener('click', function(e){ const x = e.target.closest('[data-remove-consolation]'); if(x) removeConsolation(x.dataset.removeConsolation); });
+    document.getElementById('consolationList').addEventListener('click', function(e){ const x = e.target.closest('[data-remove-consolation]'); if(x && !state.isGuest) removeConsolation(x.dataset.removeConsolation); });
     
     document.getElementById('consolationList').addEventListener('input', function(e){
-        if(e.target.classList.contains('prize-name-input')) { const idx = e.target.dataset.consPrize; if(!state.prizes.consolation[idx]) state.prizes.consolation[idx] = {}; state.prizes.consolation[idx].name = e.target.value; }
+        if(e.target.classList.contains('prize-name-input') && !state.isGuest) { const idx = e.target.dataset.consPrize; if(!state.prizes.consolation[idx]) state.prizes.consolation[idx] = {}; state.prizes.consolation[idx].name = e.target.value; }
     });
     document.getElementById('consolationList').addEventListener('change', function(e){
-        if(e.target.classList.contains('prize-img-input')) {
+        if(e.target.classList.contains('prize-img-input') && !state.isGuest) {
             const idx = e.target.dataset.consImg;
             readImageFile(e.target.files[0], function(dataStr) { if(!state.prizes.consolation[idx]) state.prizes.consolation[idx] = {}; state.prizes.consolation[idx].image = dataStr; });
         }
@@ -2014,7 +2018,7 @@
     // Winner Details View - Click on winner name to view details
     document.getElementById('topWinnersList').addEventListener('click', function(e) {
       const viewBtn = e.target.closest('[data-view-winner]');
-      if (viewBtn) {
+      if (viewBtn && !state.isGuest) {
         const type = viewBtn.dataset.viewWinner;
         const idx = parseInt(viewBtn.dataset.winnerIdx, 10);
         showWinnerDetails(type, idx);
@@ -2023,7 +2027,7 @@
     
     document.getElementById('consolationList').addEventListener('click', function(e) {
       const viewBtn = e.target.closest('[data-view-winner]');
-      if (viewBtn) {
+      if (viewBtn && !state.isGuest) {
         const type = viewBtn.dataset.viewWinner;
         const idx = parseInt(viewBtn.dataset.winnerIdx, 10);
         showWinnerDetails(type, idx);
@@ -2158,6 +2162,11 @@
       const deleteEntrantBtns = document.querySelectorAll('.delete-entrant');
       const themeButtons = document.querySelectorAll('.theme-btn');
       const eliminationControls = document.getElementById('eliminationControls');
+      const drawControls = document.getElementById('drawControls');
+      const clearNamesBtn = document.getElementById('clearNamesBtn');
+      const resetWinnersBtn = document.getElementById('resetWinnersBtn');
+      const clearConsolationBtn = document.getElementById('clearConsolationBtn');
+      const resetThemeColorsBtn = document.getElementById('resetThemeColorsBtn');
 
       if (addNameForm) addNameForm.style.display = 'none';
       if (shuffleBtn) shuffleBtn.style.display = 'none';
@@ -2165,7 +2174,12 @@
       if (startDrawBtn) startDrawBtn.style.display = 'none';
       if (startElimBtn) startElimBtn.style.display = 'none';
       if (eliminationControls) eliminationControls.style.display = 'none';
+      if (drawControls) drawControls.style.display = 'none';
       if (openSettingsBtn) openSettingsBtn.style.display = 'none';
+      if (clearNamesBtn) clearNamesBtn.style.display = 'none';
+      if (resetWinnersBtn) resetWinnersBtn.style.display = 'none';
+      if (clearConsolationBtn) clearConsolationBtn.style.display = 'none';
+      if (resetThemeColorsBtn) resetThemeColorsBtn.style.display = 'none';
       
       // Hide theme selector buttons for guests
       themeButtons.forEach(function(btn) {
