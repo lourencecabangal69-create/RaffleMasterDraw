@@ -225,8 +225,28 @@
   .pop-prize-img { max-width: 250px; max-height: 250px; border-radius: 12px; margin: 0 auto 24px; display: block; object-fit: cover; }
   .pop-message { font-family: var(--font-mono); font-size: 16px; color: var(--text-dim); margin-bottom: 15px; }
 
+  .winner-name.clickable-winner { cursor: pointer; text-decoration: underline; text-decoration-color: var(--accent); text-underline-offset: 3px; }
+  .winner-name.clickable-winner:hover { color: var(--accent); }
+  
   .elimination-modal .pop-animation { border-color: var(--accent); }
   .elimination-modal h2 { font-family: var(--font-display); font-size: 32px; color: var(--accent); margin-bottom: 20px;}
+
+  /* Winner Details Modal */
+  .winner-details-content { text-align: left; max-width: 500px; }
+  .winner-details-content h3 { font-family: var(--font-display); font-size: 28px; color: var(--accent-2); margin-bottom: 16px; text-align: center; }
+  .winner-info-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--border); }
+  .winner-info-row:last-child { border-bottom: none; }
+  .winner-info-label { font-weight: 600; color: var(--text-dim); font-size: 14px; }
+  .winner-info-value { font-weight: 500; color: var(--text); font-size: 14px; text-align: right; max-width: 60%; word-break: break-word; }
+  .winner-prize-display { background: rgba(0,0,0,0.2); padding: 12px; border-radius: 8px; margin: 16px 0; text-align: center; }
+  .winner-prize-name { font-size: 18px; color: var(--accent-2); font-weight: bold; }
+  .winner-prize-img { max-width: 200px; max-height: 150px; border-radius: 8px; margin-top: 8px; }
+  .viewed-badge { display: inline-block; background: var(--accent); color: var(--accent-contrast); font-size: 10px; padding: 2px 8px; border-radius: 10px; margin-left: 6px; vertical-align: middle; }
+  
+  /* Export Buttons */
+  .export-actions { display: flex; gap: 10px; justify-content: center; margin-top: 20px; }
+  .btn-export { background: var(--surface-alt); border: 1px solid var(--border); color: var(--text); padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600; transition: all 0.2s; }
+  .btn-export:hover { background: var(--accent); color: var(--accent-contrast); border-color: var(--accent); }
 
   /* Tabbed Settings Modal */
   .settings-card { width: 560px; max-width: 95vw; background: var(--surface); border: 2px solid var(--border); border-radius: 20px; padding: 0; overflow: hidden; text-align: left; }
@@ -314,9 +334,14 @@
         <input type="text" id="nameInput" class="input" placeholder="Type a name…" autocomplete="off" maxlength="40" style="font-size:13px; padding:8px 10px;" />
         <button type="submit" class="btn btn-primary btn-small" style="font-size:12px; padding:7px 12px;">Add</button>
       </form>
+      <div style="display: flex; gap: 6px; margin-bottom: 6px;">
+        <input type="text" id="contactInput" class="input" placeholder="Contact (optional)" style="font-size:12px; padding:8px 10px; flex: 1;" />
+        <input type="text" id="addressInput" class="input" placeholder="Address (optional)" style="font-size:12px; padding:8px 10px; flex: 1;" />
+      </div>
       <button type="button" id="toggleBulkBtn" class="btn btn-ghost btn-small" style="margin-bottom:6px; font-size:12px;">Paste a list instead</button>
       <div id="bulkAddWrap" class="bulk-add-wrap hidden">
         <textarea id="bulkInput" class="input textarea" placeholder="One name per line (or comma separated)" style="min-height:60px; font-size:12px;"></textarea>
+        <p style="font-size: 11px; color: var(--text-dim); margin: 6px 0;">Note: Bulk add does not include contact/address. Add those individually after.</p>
         <button type="button" id="bulkAddBtn" class="btn btn-primary btn-small" style="margin-top:6px; width:100%; font-size:12px;">Add all</button>
       </div>
       <ul id="entrantsList" class="entrants-list" style="max-height:none; flex:1; overflow-y:auto;"></ul>
@@ -586,6 +611,35 @@
     </div>
   </div>
 
+  <!-- Winner Details View Modal (Click to View) -->
+  <div id="winnerDetailsModal" class="modal-overlay">
+    <div class="pop-animation winner-details-content">
+      <h3 id="detailsWinnerName">Winner Name</h3>
+      <div class="winner-prize-display" id="detailsPrizeDisplay">
+        <div class="winner-prize-name" id="detailsPrizeName">Prize</div>
+        <img src="" id="detailsPrizeImg" class="winner-prize-img hidden" alt="Prize">
+      </div>
+      <div class="winner-info-row">
+        <span class="winner-info-label">📞 Contact Number</span>
+        <span class="winner-info-value" id="detailsContact">N/A</span>
+      </div>
+      <div class="winner-info-row">
+        <span class="winner-info-label">📍 Address</span>
+        <span class="winner-info-value" id="detailsAddress">N/A</span>
+      </div>
+      <div class="winner-info-row">
+        <span class="winner-info-label">🏆 Prize Category</span>
+        <span class="winner-info-value" id="detailsCategory">Top Winner</span>
+      </div>
+      <div id="viewedBadgeContainer" style="text-align: center; margin-top: 10px;"></div>
+      <div class="export-actions">
+        <button type="button" class="btn-export" id="exportPDFBtn">📄 Export PDF</button>
+        <button type="button" class="btn-export" id="exportExcelBtn">📊 Export Excel</button>
+      </div>
+      <button type="button" class="btn btn-primary btn-large" id="closeDetailsModalBtn" style="margin-top: 16px; width: 100%;">Close</button>
+    </div>
+  </div>
+
   <!-- Action Prompt Modal -->
   <div id="actionPromptModal" class="modal-overlay elimination-modal">
     <div class="pop-animation">
@@ -771,6 +825,9 @@
       winFontColor: "#ffffff"
     }
   };
+
+  // Session storage for winner view tracking
+  const SESSION_STORAGE_KEY = 'raffle_winner_viewed';
 
   // ---------------- Sound Engine ----------------
   const SoundEngine = (function() {
@@ -966,14 +1023,14 @@
     return state.entrants.filter(function(e){ return !used.has(e.id); });
   }
 
-  function addName(name){
+  function addName(name, contact = '', address = ''){
     name = (name || '').trim(); if(!name) return;
-    state.entrants.push({ id: makeId(), name: name });
+    state.entrants.push({ id: makeId(), name: name, contact: contact, address: address });
     checkPhase(); renderAll();
   }
   function addBulk(text){
     const parts = (text || '').split(/[\n,]+/).map(function(s){ return s.trim(); }).filter(Boolean);
-    parts.forEach(function(n){ state.entrants.push({ id: makeId(), name: n }); });
+    parts.forEach(function(n){ state.entrants.push({ id: makeId(), name: n, contact: '', address: '' }); });
     checkPhase(); renderAll();
   }
   function removeEntrant(id){
@@ -1345,6 +1402,124 @@
     modal.classList.add('show');
   }
 
+  // Show winner details modal with contact/address info
+  let currentViewedWinner = null;
+  function showWinnerDetails(type, idx) {
+    const modal = document.getElementById('winnerDetailsModal');
+    let winner, prize, category;
+    
+    if (type === 'top') {
+      winner = state.topWinners[idx];
+      prize = state.prizes.top[idx];
+      const place = idx + 1;
+      const medal = place === 1 ? '🥇' : (place === 2 ? '🥈' : (place === 3 ? '🥉' : '🎖️'));
+      category = medal + ' Place ' + place + ' Winner';
+      sessionStorage.setItem(SESSION_STORAGE_KEY + '_top_' + idx, 'true');
+    } else {
+      winner = state.consolationWinners[idx];
+      prize = state.prizes.consolation[idx];
+      category = 'Consolation Prize Winner';
+      sessionStorage.setItem(SESSION_STORAGE_KEY + '_cons_' + idx, 'true');
+    }
+    
+    if (!winner) return;
+    
+    currentViewedWinner = { winner: winner, prize: prize, category: category, type: type, idx: idx };
+    
+    document.getElementById('detailsWinnerName').textContent = winner.name;
+    document.getElementById('detailsContact').textContent = winner.contact || 'N/A';
+    document.getElementById('detailsAddress').textContent = winner.address || 'N/A';
+    document.getElementById('detailsCategory').textContent = category;
+    
+    const prizeNameEl = document.getElementById('detailsPrizeName');
+    const prizeImgEl = document.getElementById('detailsPrizeImg');
+    
+    if (prize && prize.name) {
+      prizeNameEl.textContent = prize.name;
+    } else {
+      prizeNameEl.textContent = '🏆 Winner Prize';
+    }
+    
+    if (prize && prize.image) {
+      prizeImgEl.src = prize.image;
+      prizeImgEl.classList.remove('hidden');
+    } else {
+      prizeImgEl.src = '';
+      prizeImgEl.classList.add('hidden');
+    }
+    
+    // Update viewed badge
+    const badgeContainer = document.getElementById('viewedBadgeContainer');
+    badgeContainer.innerHTML = '<span class="viewed-badge">✓ VIEWED IN THIS SESSION</span>';
+    
+    modal.classList.add('show');
+    renderAll(); // Re-render to show the VIEWED badge
+  }
+  
+  // Export winner data to PDF (simple print-based approach)
+  function exportWinnerToPDF() {
+    if (!currentViewedWinner) return;
+    const w = currentViewedWinner.winner;
+    const p = currentViewedWinner.prize;
+    const cat = currentViewedWinner.category;
+    
+    const printContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Winner Details - ${escapeHTML(w.name)}</title>
+        <style>
+          body { font-family: Arial, sans-serif; padding: 40px; }
+          h1 { color: #6c5ce7; }
+          .info-row { margin: 15px 0; padding: 10px; background: #f5f5f5; border-radius: 8px; }
+          .label { font-weight: bold; color: #555; }
+          .value { margin-left: 10px; }
+        </style>
+      </head>
+      <body>
+        <h1>🏆 Raffle Winner Details</h1>
+        <div class="info-row"><span class="label">Winner Name:</span><span class="value">${escapeHTML(w.name)}</span></div>
+        <div class="info-row"><span class="label">Category:</span><span class="value">${escapeHTML(cat)}</span></div>
+        <div class="info-row"><span class="label">Contact Number:</span><span class="value">${escapeHTML(w.contact || 'N/A')}</span></div>
+        <div class="info-row"><span class="label">Address:</span><span class="value">${escapeHTML(w.address || 'N/A')}</span></div>
+        <div class="info-row"><span class="label">Prize:</span><span class="value">${escapeHTML(p && p.name ? p.name : 'Winner Prize')}</span></div>
+        <script>window.onload = function() { window.print(); }</script>
+      </body>
+      </html>
+    `;
+    
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(printContent);
+    printWindow.document.close();
+  }
+  
+  // Export winner data to Excel (CSV format)
+  function exportWinnerToExcel() {
+    if (!currentViewedWinner) return;
+    const w = currentViewedWinner.winner;
+    const p = currentViewedWinner.prize;
+    const cat = currentViewedWinner.category;
+    
+    const csvContent = [
+      ['Field', 'Value'],
+      ['Winner Name', w.name],
+      ['Category', cat],
+      ['Contact Number', w.contact || 'N/A'],
+      ['Address', w.address || 'N/A'],
+      ['Prize', (p && p.name) ? p.name : 'Winner Prize']
+    ].map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n');
+    
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `winner_${w.name.replace(/\s+/g, '_')}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+
   // ---------------- Render ----------------
   function renderEntrants(){
     const list = document.getElementById('entrantsList'); document.getElementById('entrantsCount').textContent = state.entrants.length;
@@ -1365,9 +1540,12 @@
     el.innerHTML = state.topWinners.map(function(w, i){
       const place = i + 1; const medal = place === 1 ? '🥇' : (place === 2 ? '🥈' : (place === 3 ? '🥉' : '🎖️'));
       const prizeInfo = state.prizes.top[i] || {name: ''};
+      const isViewed = w ? sessionStorage.getItem(SESSION_STORAGE_KEY + '_top_' + i) : false;
+      const viewedBadge = isViewed ? '<span class="viewed-badge">VIEWED</span>' : '';
       return '<li class="winner-slot ' + (w ? 'filled' : 'empty') + '"><div class="winner-header">' + 
           '<span class="place-badge">' + medal + '<span class="place-num">' + String(place).padStart(2, '0') + '</span></span>' +
-          '<span class="winner-name ' + (w ? '' : 'placeholder') + '">' + (w ? escapeHTML(w.name) : 'Not drawn yet') + '</span>' +
+          '<span class="winner-name ' + (w ? 'clickable-winner' : 'placeholder') + '" ' + (w ? 'data-view-winner="top" data-winner-idx="' + i + '"' : '') + '>' + (w ? escapeHTML(w.name) : 'Not drawn yet') + '</span>' +
+          viewedBadge +
           '<span class="slot-actions">' + (w ? '<button type="button" class="icon-btn" data-clear-top="' + i + '" title="Clear Winner">✕</button>' : '') + '</span>' +
         '</div><div class="prize-config">' +
           '<input type="text" class="input prize-name-input" data-top-prize="' + i + '" placeholder="Prize Details" value="' + escapeHTML(prizeInfo.name || '') + '">' +
@@ -1384,8 +1562,11 @@
     const el = document.getElementById('consolationList'); let slotsHtml = '';
     for(let i=0; i<state.consolationLimit; i++) {
         const w = state.consolationWinners[i]; const prizeInfo = state.prizes.consolation[i] || {name: ''};
+        const isViewed = w ? sessionStorage.getItem(SESSION_STORAGE_KEY + '_cons_' + i) : false;
+        const viewedBadge = isViewed ? '<span class="viewed-badge">VIEWED</span>' : '';
         slotsHtml += '<li class="winner-slot ' + (w ? 'filled consolation' : 'empty') + '"><div class="winner-header">' + 
-            '<span class="winner-name ' + (w ? '' : 'placeholder') + '">' + (w ? escapeHTML(w.name) : 'Consolation slot') + '</span>' +
+            '<span class="winner-name ' + (w ? 'clickable-winner' : 'placeholder') + '" ' + (w ? 'data-view-winner="cons" data-winner-idx="' + i + '"' : '') + '>' + (w ? escapeHTML(w.name) : 'Consolation slot') + '</span>' +
+            viewedBadge +
             '<span class="slot-actions">' + (w ? '<button type="button" class="icon-btn" data-remove-consolation="' + w.id + '" title="Remove">✕</button>' : '') + '</span>' +
           '</div><div class="prize-config">' +
             '<input type="text" class="input prize-name-input" data-cons-prize="' + i + '" placeholder="Prize Name" value="' + escapeHTML(prizeInfo.name || '') + '">' +
@@ -1459,7 +1640,15 @@
   
     // Add Entrants
     document.getElementById('addNameForm').addEventListener('submit', function(e){
-      e.preventDefault(); const input = document.getElementById('nameInput'); addName(input.value); input.value = ''; input.focus();
+      e.preventDefault(); 
+      const nameInput = document.getElementById('nameInput');
+      const contactInput = document.getElementById('contactInput');
+      const addressInput = document.getElementById('addressInput');
+      addName(nameInput.value, contactInput.value, addressInput.value); 
+      nameInput.value = ''; 
+      contactInput.value = ''; 
+      addressInput.value = ''; 
+      nameInput.focus();
     });
     document.getElementById('toggleBulkBtn').addEventListener('click', function(){ document.getElementById('bulkAddWrap').classList.toggle('hidden'); });
     document.getElementById('bulkAddBtn').addEventListener('click', function(){ const ta = document.getElementById('bulkInput'); addBulk(ta.value); ta.value = ''; });
@@ -1520,6 +1709,40 @@
         document.getElementById('eliminationControls').classList.add('hidden');
     });
     document.getElementById('closeWinnerModalBtn').addEventListener('click', function() { document.getElementById('winnerModal').classList.remove('show'); });
+
+    // Winner Details View - Click on winner name to view details
+    document.getElementById('topWinnersList').addEventListener('click', function(e) {
+      const viewBtn = e.target.closest('[data-view-winner]');
+      if (viewBtn) {
+        const type = viewBtn.dataset.viewWinner;
+        const idx = parseInt(viewBtn.dataset.winnerIdx, 10);
+        showWinnerDetails(type, idx);
+      }
+    });
+    
+    document.getElementById('consolationList').addEventListener('click', function(e) {
+      const viewBtn = e.target.closest('[data-view-winner]');
+      if (viewBtn) {
+        const type = viewBtn.dataset.viewWinner;
+        const idx = parseInt(viewBtn.dataset.winnerIdx, 10);
+        showWinnerDetails(type, idx);
+      }
+    });
+
+    // Winner Details Modal Controls
+    document.getElementById('closeDetailsModalBtn').addEventListener('click', function() {
+      document.getElementById('winnerDetailsModal').classList.remove('show');
+    });
+    
+    // Export PDF
+    document.getElementById('exportPDFBtn').addEventListener('click', function() {
+      exportWinnerToPDF();
+    });
+    
+    // Export Excel
+    document.getElementById('exportExcelBtn').addEventListener('click', function() {
+      exportWinnerToExcel();
+    });
 
     // Settings Modal Navigation & Inputs Wiring
     document.getElementById('openSettingsBtn').addEventListener('click', function(){ document.getElementById('settingsModal').classList.add('show'); });
