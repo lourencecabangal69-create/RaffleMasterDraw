@@ -557,6 +557,7 @@
                 theme: state.theme,
                 isDrawing: state.isDrawing,
                 eliminationModeActive: state.eliminationModeActive,
+                wheelRotation: state.wheelRotation,
                 lastUpdated: serverTimestamp()
             }, { merge: true });
         } catch (err) {
@@ -586,6 +587,8 @@
                 state.consolationLimit = data.consolationLimit || 3;
                 state.theme = data.theme || 'wheel';
                 state.eliminationModeActive = data.eliminationModeActive !== undefined ? data.eliminationModeActive : true;
+                state.wheelRotation = data.wheelRotation || 0;
+                state.isDrawing = data.isDrawing || false;
                 
                 // Re-render everything for the guest to see host's interactions
                 renderAll();
