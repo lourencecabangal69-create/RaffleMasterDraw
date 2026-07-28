@@ -303,7 +303,6 @@
   }
   @media (prefers-reduced-motion: reduce){ *{ animation-duration:.01ms !important; transition-duration:.01ms !important; } }
 </style>
-<base target="_blank">
 </head>
 <body class="theme-wheel">
 
@@ -829,6 +828,27 @@
   // Session storage for winner view tracking
   const SESSION_STORAGE_KEY = 'raffle_winner_viewed';
 
+  // Save state to localStorage
+  function saveState(){
+    try {
+      const stateToSave = {
+        entrants: state.entrants,
+        eliminatedIds: state.eliminatedIds,
+        topWinners: state.topWinners,
+        consolationWinners: state.consolationWinners,
+        prizes: state.prizes,
+        topSlots: state.topSlots,
+        consolationEnabled: state.consolationEnabled,
+        consolationLimit: state.consolationLimit,
+        theme: state.theme,
+        settings: state.settings
+      };
+      localStorage.setItem('raffle_state', JSON.stringify(stateToSave));
+    } catch(e) {
+      console.error('Failed to save state:', e);
+    }
+  }
+
   // ---------------- Sound Engine ----------------
   const SoundEngine = (function() {
     const AudioContext = window.AudioContext || window.webkitAudioContext;
@@ -1026,11 +1046,13 @@
   function addName(name, contact = '', address = ''){
     name = (name || '').trim(); if(!name) return;
     state.entrants.push({ id: makeId(), name: name, contact: contact, address: address });
+    saveState();
     checkPhase(); renderAll();
   }
   function addBulk(text){
     const parts = (text || '').split(/[\n,]+/).map(function(s){ return s.trim(); }).filter(Boolean);
     parts.forEach(function(n){ state.entrants.push({ id: makeId(), name: n, contact: '', address: '' }); });
+    saveState();
     checkPhase(); renderAll();
   }
   function removeEntrant(id){
@@ -1038,6 +1060,7 @@
     state.eliminatedIds = state.eliminatedIds.filter(function(eid){ return eid !== id; });
     state.topWinners = state.topWinners.map(function(w){ return (w && w.id === id) ? null : w; });
     state.consolationWinners = state.consolationWinners.filter(function(w){ return w.id !== id; });
+    saveState();
     checkPhase(); renderAll();
   }
   function setTopSlots(n){
@@ -1129,6 +1152,7 @@
       showResultBanner(winner.name);
       celebrate();
       showWinnerModal(winner, state.prizes.top[slotIndex]);
+      saveState();
       renderAll();
     }, false);
   }
@@ -1150,12 +1174,13 @@
       showResultBanner(winner.name);
       celebrate();
       showWinnerModal(winner, state.prizes.consolation[slotIndex]);
+      saveState();
       renderAll();
     }, false);
   }
 
-  function clearTopSlot(slotIndex){ if(state.isDrawing) return; state.topWinners[slotIndex] = null; renderAll(); }
-  function removeConsolation(id){ if(state.isDrawing) return; state.consolationWinners = state.consolationWinners.filter(w => w.id !== id); renderAll(); }
+  function clearTopSlot(slotIndex){ if(state.isDrawing) return; state.topWinners[slotIndex] = null; saveState(); renderAll(); }
+  function removeConsolation(id){ if(state.isDrawing) return; state.consolationWinners = state.consolationWinners.filter(w => w.id !== id); saveState(); renderAll(); }
 
   // ---------------- Theme Visual Animations ----------------
   function themeNoun(){ switch(state.theme){ case 'wheel': return 'wheel'; case 'slot': return 'reels'; case 'drum': return 'drum'; case 'ticket': return 'ticket stack'; default: return 'stage'; } }
@@ -1654,7 +1679,7 @@
     document.getElementById('bulkAddBtn').addEventListener('click', function(){ const ta = document.getElementById('bulkInput'); addBulk(ta.value); ta.value = ''; });
     document.getElementById('entrantsList').addEventListener('click', function(e){ const btn = e.target.closest('[data-remove-id]'); if(btn) removeEntrant(btn.dataset.removeId); });
     document.getElementById('clearNamesBtn').addEventListener('click', function(){
-      armConfirm(this, function(){ state.entrants = []; state.eliminatedIds = []; state.topWinners = state.topWinners.map(()=>null); state.consolationWinners = []; clearResultBanner(); checkPhase(); renderAll(); });
+      armConfirm(this, function(){ state.entrants = []; state.eliminatedIds = []; state.topWinners = state.topWinners.map(()=>null); state.consolationWinners = []; clearResultBanner(); saveState(); checkPhase(); renderAll(); });
     });
     document.getElementById('topSlotsInput').addEventListener('change', function(e){ setTopSlots(parseInt(e.target.value, 10) || 1); e.target.value = state.topSlots; });
     
@@ -1694,9 +1719,9 @@
         }
     });
 
-    document.getElementById('clearConsolationBtn').addEventListener('click', function(){ armConfirm(this, function(){ state.consolationWinners = []; renderAll(); }); });
+    document.getElementById('clearConsolationBtn').addEventListener('click', function(){ armConfirm(this, function(){ state.consolationWinners = []; saveState(); renderAll(); }); });
     document.getElementById('resetWinnersBtn').addEventListener('click', function(){
-      armConfirm(this, function(){ state.topWinners = state.topWinners.map(()=>null); state.consolationWinners = []; state.eliminatedIds = []; clearResultBanner(); checkPhase(); renderAll(); });
+      armConfirm(this, function(){ state.topWinners = state.topWinners.map(()=>null); state.consolationWinners = []; state.eliminatedIds = []; clearResultBanner(); saveState(); checkPhase(); renderAll(); });
     });
     document.getElementById('themeSwitcher').addEventListener('click', function(e){ const btn = e.target.closest('.theme-btn'); if(btn) setTheme(btn.dataset.theme); });
 
@@ -1798,8 +1823,57 @@
 
   // ---------------- Init ----------------
   function init(){
-    // Activity Logs: Visit Counter (persisted in localStorage)
-        // Activity Logs: Visit Counter (Session-based to prevent refresh spam)
+    // Load saved state from localStorage
+    try {
+      const savedState = localStorage.getItem('raffle_state');
+      if (savedState) {
+        const parsed = JSON.parse(savedState);
+        if (parsed.entrants && Array.isArray(parsed.entrants)) {
+          state.entrants = parsed.entrants;
+          uidCounter = state.entrants.length + 1;
+        }
+        if (parsed.eliminatedIds && Array.isArray(parsed.eliminatedIds)) {
+          state.eliminatedIds = parsed.eliminatedIds;
+        }
+        if (parsed.topWinners && Array.isArray(parsed.topWinners)) {
+          state.topWinners = parsed.topWinners;
+        }
+        if (parsed.consolationWinners && Array.isArray(parsed.consolationWinners)) {
+          state.consolationWinners = parsed.consolationWinners;
+        }
+        if (parsed.prizes) {
+          state.prizes = parsed.prizes;
+        }
+        if (parsed.topSlots) {
+          state.topSlots = parsed.topSlots;
+        }
+        if (parsed.consolationEnabled !== undefined) {
+          state.consolationEnabled = parsed.consolationEnabled;
+        }
+        if (parsed.consolationLimit) {
+          state.consolationLimit = parsed.consolationLimit;
+        }
+        if (parsed.theme) {
+          state.theme = parsed.theme;
+        }
+        if (parsed.settings) {
+          state.settings = { ...state.settings, ...parsed.settings };
+        }
+      } else {
+        // Only add default names if no saved state exists
+        ['Alex','Jordan','Sam','Taylor','Morgan','Casey','Riley','Jamie'].forEach(function(n){ 
+          state.entrants.push({ id: makeId(), name: n, contact: '', address: '' }); 
+        });
+      }
+    } catch(e) { 
+      console.error('Failed to load saved state:', e);
+      // Fallback to defaults on error
+      ['Alex','Jordan','Sam','Taylor','Morgan','Casey','Riley','Jamie'].forEach(function(n){ 
+        state.entrants.push({ id: makeId(), name: n, contact: '', address: '' }); 
+      });
+    }
+
+    // Activity Logs: Visit Counter (Session-based to prevent refresh spam)
     try {
       let visits = parseInt(localStorage.getItem('rm_visitCount') || '0', 10);
       visits = isNaN(visits) ? 0 : visits;
@@ -1814,7 +1888,6 @@
       state.visitCount = visits;
     } catch(e) { state.visitCount = 1; }
 
-    ['Alex','Jordan','Sam','Taylor','Morgan','Casey','Riley','Jamie'].forEach(function(n){ state.entrants.push({ id: makeId(), name: n }); });
     initTopWinners();
     document.body.className = 'theme-' + state.theme;
     updateThemeButtons();
