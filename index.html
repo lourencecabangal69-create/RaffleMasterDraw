@@ -835,7 +835,12 @@
 
     // Helper function for toast notifications (defined early for screen sharing)
     function showToast(text, type) {
-        showMessage(text);
+        const toast = document.getElementById('toast');
+        if (toast) {
+            toast.textContent = text;
+            toast.classList.add('show');
+            setTimeout(function(){ toast.classList.remove('show'); }, 2600);
+        }
     }
 
     window.startScreenShare = async function(sessionId) {
