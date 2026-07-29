@@ -549,8 +549,13 @@
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
     
-    // Initialize Realtime Database with explicit URL to avoid warnings
-    const realtimedb = getDatabase(app, "https://raffle-draw-app-alph1tech-default-rtdb.firebaseio.com/");
+    // Initialize Realtime Database with try-catch to handle missing database gracefully
+    let realtimedb = null;
+    try {
+      realtimedb = getDatabase(app, "https://raffle-draw-app-alph1tech-default-rtdb.firebaseio.com/");
+    } catch (error) {
+      console.warn("Firebase Realtime Database not available. Screen sharing will be disabled.", error.message);
+    }
     const commentsCollection = collection(db, "raffle_comments");
     const statsDoc = doc(db, "stats", "global");
     const visitsDoc = doc(db, "visits", "global");
@@ -830,6 +835,12 @@
     
     // Expose screen sharing functions to main script
     window.startScreenShare = async function(sessionId) {
+        // Check if Realtime Database is available
+        if (!realtimedb) {
+            alert("Screen sharing requires Firebase Realtime Database to be enabled. Please enable it in your Firebase Console or contact support.");
+            return;
+        }
+        
         try {
             // Request screen share from host
             const stream = await navigator.mediaDevices.getDisplayMedia({
@@ -928,6 +939,12 @@
     };
     
     window.joinAsGuest = async function(sessionId) {
+        // Check if Realtime Database is available
+        if (!realtimedb) {
+            alert("Screen sharing requires Firebase Realtime Database to be enabled. Please enable it in your Firebase Console or contact support.");
+            return Promise.reject(new Error("Realtime Database not available"));
+        }
+        
         try {
             // Listen for host's offer
             const offerRef = ref(realtimedb, `sessions/${sessionId}/offer`);
