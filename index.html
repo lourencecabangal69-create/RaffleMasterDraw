@@ -1014,8 +1014,12 @@
                 let pc = null;
                 let guestAnswered = false;
                 
+                console.log('🔵 [WEBRTC] Setting up onValue listener for offer...');
                 onValue(offerRef, async (snapshot) => {
+                    console.log('🔵 [WEBRTC] Offer snapshot received:', snapshot.exists() ? 'EXISTS' : 'NOT EXISTS');
                     const offerData = snapshot.val();
+                    console.log('🔵 [WEBRTC] Offer data:', offerData);
+                    
                     if (!offerData || !offerData.sdp) {
                         console.log('🟡 [WEBRTC] Waiting for valid offer from host...');
                         return;
