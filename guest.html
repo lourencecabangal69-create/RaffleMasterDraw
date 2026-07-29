@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Guest View - Raffle Master Draw</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            color: #fff;
+        }
+
+        .header {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            backdrop-filter: blur(10px);
+        }
+
+        .header h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            font-size: 0.9rem;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #ffd700;
+            animation: pulse 2s infinite;
+        }
+
+        .status-dot.connected {
+            background: #4ade80;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .main-content {
+            flex: 1;
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 1rem;
+            padding: 1rem;
+            max-width: 1600px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        .video-section {
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 12px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .video-header {
+            padding: 1rem;
+            background: rgba(255, 255, 255, 0.1);
+            font-weight: 600;
+        }
+
+        .video-container {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #000;
+            min-height: 400px;
+            position: relative;
+        }
+
+        #guestVideo {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        .waiting-message {
+            position: absolute;
+            text-align: center;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .waiting-message h3 {
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .feedback-section {
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 12px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .feedback-header {
+            padding: 1rem;
+            background: rgba(255, 255, 255, 0.1);
+            font-weight: 600;
+        }
+
+        .feedback-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .feedback-item {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 0.75rem;
+            border-radius: 8px;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .feedback-nickname {
+            font-weight: 600;
+            color: #fbbf24;
+            margin-bottom: 0.25rem;
+            font-size: 0.9rem;
+        }
+
+        .feedback-text {
+            color: #fff;
+            line-height: 1.4;
+        }
+
+        .feedback-form {
+            padding: 1rem;
+            background: rgba(255, 255, 255, 0.05);
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .feedback-form input,
+        .feedback-form textarea {
+            padding: 0.75rem;
+            border: none;
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.9);
+            color: #333;
+            font-family: inherit;
+        }
+
+        .feedback-form textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        .feedback-form button {
+            padding: 0.75rem;
+            background: #fbbf24;
+            color: #000;
+            border: none;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .feedback-form button:hover {
+            background: #f59e0b;
+        }
+
+        .feedback-form button:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+        }
+
+        .error-message {
+            background: rgba(239, 68, 68, 0.9);
+            padding: 1rem;
+            text-align: center;
+            display: none;
+        }
+
+        .error-message.show {
+            display: block;
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+
+            .video-container {
+                min-height: 300px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🎬 Guest View - Raffle Master Draw</h1>
+        <div class="status-indicator">
+            <div class="status-dot" id="statusDot"></div>
+            <span id="statusText">Connecting...</span>
+        </div>
+    </div>
+
+    <div class="error-message" id="errorMessage"></div>
+
+    <div class="main-content">
+        <div class="video-section">
+            <div class="video-header">📺 Live Host Screen</div>
+            <div class="video-container">
+                <video id="guestVideo" autoplay playsinline></video>
+                <div class="waiting-message" id="waitingMessage">
+                    <h3>⏳ Waiting for host to start sharing...</h3>
+                    <p>The host will begin screen sharing shortly</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="feedback-section">
+            <div class="feedback-header">💬 Live Feedback & Shoutouts</div>
+            <div class="feedback-list" id="feedbackList">
+                <!-- Feedback items will be loaded here -->
+            </div>
+            <div class="feedback-form">
+                <input type="text" id="feedbackNickname" placeholder="Your nickname (optional)" />
+                <textarea id="feedbackText" placeholder="Send your feedback or shoutout..."></textarea>
+                <button id="sendFeedbackBtn">Send Message</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+
+    <script>
+        // ============================================
+        // 1. FIREBASE CONFIGURATION
+        // ============================================
+        const firebaseConfig = {
+            apiKey: "AIzaSyBvqNqz3xQYKZ9kMqPqGqJqKqLqMqNqOqP",
+            authDomain: "raffle-draw-app-alph1tech.firebaseapp.com",
+            databaseURL: "https://raffle-draw-app-alph1tech-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "raffle-draw-app-alph1tech",
+            storageBucket: "raffle-draw-app-alph1tech.appspot.com",
+            messagingSenderId: "123456789012",
+            appId: "1:123456789012:web:abcdef1234567890"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+        console.log('🟢 [FIREBASE] Initialized successfully');
+
+        // ============================================
+        // 2. URL PARAMETER PARSING
+        // ============================================
+        const urlParams = new URLSearchParams(window.location.search);
+        const roomId = urlParams.get('room');
+        const guestId = urlParams.get('guest') || 'guest_' + Math.random().toString(36).substr(2, 9);
+
+        if (!roomId) {
+            showError('Invalid link: Missing room ID');
+            throw new Error('Missing room parameter');
+        }
+
+        console.log(`🟢 [GUEST] Joined room: ${roomId}, Guest ID: ${guestId}`);
+
+        // ============================================
+        // 3. WEBRTC SETUP
+        // ============================================
+        let peerConnection = null;
+        let remoteStream = null;
+
+        const iceServers = {
+            iceServers: [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun1.l.google.com:19302' }
+            ]
+        };
+
+        async function initializeWebRTC() {
+            try {
+                console.log('🔵 [WEBRTC] Initializing PeerConnection...');
+                updateStatus('connecting', 'Connecting to host...');
+
+                peerConnection = new RTCPeerConnection(iceServers);
+
+                // Handle remote stream
+                peerConnection.ontrack = (event) => {
+                    console.log('🟢 [WEBRTC] Received remote track:', event.track.kind);
+                    if (event.streams && event.streams[0]) {
+                        remoteStream = event.streams[0];
+                        const videoElement = document.getElementById('guestVideo');
+                        videoElement.srcObject = remoteStream;
+                        document.getElementById('waitingMessage').style.display = 'none';
+                        updateStatus('connected', 'Live');
+                        console.log('🟢 [WEBRTC] Stream attached to video element');
+                    }
+                };
+
+                // Handle ICE candidates
+                peerConnection.onicecandidate = async (event) => {
+                    if (event.candidate) {
+                        console.log('🔵 [WEBRTC] ICE candidate generated');
+                        try {
+                            await db.collection('rooms').doc(roomId)
+                                .collection('guests').doc(guestId)
+                                .collection('iceCandidates').add({
+                                    candidate: event.candidate.toJSON(),
+                                    timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                                });
+                        } catch (err) {
+                            console.error('🔴 [WEBRTC] Failed to send ICE candidate:', err);
+                        }
+                    }
+                };
+
+                peerConnection.onconnectionstatechange = () => {
+                    console.log('🔵 [WEBRTC] Connection state:', peerConnection.connectionState);
+                    if (peerConnection.connectionState === 'connected') {
+                        updateStatus('connected', 'Live');
+                    } else if (peerConnection.connectionState === 'disconnected' || 
+                               peerConnection.connectionState === 'failed') {
+                        updateStatus('disconnected', 'Reconnecting...');
+                    }
+                };
+
+                // Listen for host offer
+                listenForOffer();
+
+            } catch (err) {
+                console.error('🔴 [WEBRTC] Initialization failed:', err);
+                showError('Failed to initialize video connection: ' + err.message);
+                updateStatus('disconnected', 'Connection failed');
+            }
+        }
+
+        async function listenForOffer() {
+            console.log('🔵 [FIRESTORE] Listening for host offer in room:', roomId);
+            
+            db.collection('rooms').doc(roomId).onSnapshot(async (docSnapshot) => {
+                if (docSnapshot.exists) {
+                    const data = docSnapshot.data();
+                    if (data.offer && data.offer.sdp) {
+                        console.log('🟢 [FIRESTORE] Received offer from host');
+                        try {
+                            await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
+                            console.log('🔵 [WEBRTC] Remote description set, creating answer...');
+
+                            const answer = await peerConnection.createAnswer();
+                            await peerConnection.setLocalDescription(answer);
+                            console.log('🟢 [WEBRTC] Answer created, sending to host...');
+
+                            // Send answer to host
+                            await db.collection('rooms').doc(roomId).update({
+                                answer: {
+                                    type: answer.type,
+                                    sdp: answer.sdp
+                                },
+                                guestActive: true,
+                                guestJoinedAt: firebase.firestore.FieldValue.serverTimestamp()
+                            });
+                            console.log('🟢 [FIRESTORE] Answer sent to host');
+
+                        } catch (err) {
+                            console.error('🔴 [WEBRTC] Error processing offer:', err);
+                            showError('Error connecting to host: ' + err.message);
+                        }
+                    }
+                }
+            }, (err) => {
+                console.error('🔴 [FIRESTORE] Error listening for offer:', err);
+                showError('Error connecting to room: ' + err.message);
+            });
+        }
+
+        // ============================================
+        // 4. FEEDBACK SYSTEM
+        // ============================================
+        let lastCommentTime = 0;
+        const COOLDOWN_MS = 3000;
+
+        function loadFeedback() {
+            console.log('🔵 [FIRESTORE] Loading feedback for room:', roomId);
+            
+            db.collection('rooms').doc(roomId)
+                .collection('comments')
+                .orderBy('timestamp', 'asc')
+                .limitToLast(50)
+                .onSnapshot((snapshot) => {
+                    const feedbackList = document.getElementById('feedbackList');
+                    feedbackList.innerHTML = '';
+                    
+                    snapshot.forEach((doc) => {
+                        const data = doc.data();
+                        const item = document.createElement('div');
+                        item.className = 'feedback-item';
+                        item.innerHTML = `
+                            <div class="feedback-nickname">${escapeHTML(data.nickname || 'Anonymous')}</div>
+                            <div class="feedback-text">${escapeHTML(data.text)}</div>
+                        `;
+                        feedbackList.appendChild(item);
+                    });
+
+                    // Auto-scroll to bottom
+                    feedbackList.scrollTop = feedbackList.scrollHeight;
+                }, (err) => {
+                    console.error('🔴 [FIRESTORE] Error loading feedback:', err);
+                });
+        }
+
+        function sendFeedback() {
+            const nicknameInput = document.getElementById('feedbackNickname');
+            const textInput = document.getElementById('feedbackText');
+            const sendBtn = document.getElementById('sendFeedbackBtn');
+
+            let nickname = nicknameInput.value.trim();
+            const text = textInput.value.trim();
+
+            if (!text) {
+                alert('Please enter a message');
+                return;
+            }
+
+            // Auto-generate nickname if empty
+            if (!nickname) {
+                const anonCount = parseInt(localStorage.getItem('anon_comment_count') || '0') + 1;
+                nickname = `Guest-${anonCount}`;
+                localStorage.setItem('anon_comment_count', anonCount.toString());
+                nicknameInput.value = nickname;
+            }
+
+            // Cooldown check
+            const now = Date.now();
+            if (now - lastCommentTime < COOLDOWN_MS) {
+                alert('Please wait before sending another message');
+                return;
+            }
+
+            lastCommentTime = now;
+            sendBtn.disabled = true;
+            setTimeout(() => { sendBtn.disabled = false; }, COOLDOWN_MS);
+
+            // Send to Firestore
+            db.collection('rooms').doc(roomId).collection('comments').add({
+                text: text,
+                nickname: nickname,
+                guestId: guestId,
+                timestamp: firebase.firestore.FieldValue.serverTimestamp()
+            }).then(() => {
+                console.log('🟢 [FIRESTORE] Feedback sent');
+                textInput.value = '';
+            }).catch((err) => {
+                console.error('🔴 [FIRESTORE] Error sending feedback:', err);
+                alert('Failed to send message');
+                sendBtn.disabled = false;
+            });
+        }
+
+        // ============================================
+        // 5. UTILITY FUNCTIONS
+        // ============================================
+        function updateStatus(status, text) {
+            const statusDot = document.getElementById('statusDot');
+            const statusText = document.getElementById('statusText');
+            
+            statusText.textContent = text;
+            
+            if (status === 'connected') {
+                statusDot.classList.add('connected');
+            } else {
+                statusDot.classList.remove('connected');
+            }
+        }
+
+        function showError(message) {
+            const errorEl = document.getElementById('errorMessage');
+            errorEl.textContent = '❌ ' + message;
+            errorEl.classList.add('show');
+            console.error('🔴 [ERROR]', message);
+        }
+
+        function escapeHTML(str) {
+            const div = document.createElement('div');
+            div.appendChild(document.createTextNode(str));
+            return div.innerHTML;
+        }
+
+        // ============================================
+        // 6. EVENT LISTENERS
+        // ============================================
+        document.getElementById('sendFeedbackBtn').addEventListener('click', sendFeedback);
+        
+        document.getElementById('feedbackText').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendFeedback();
+            }
+        });
+
+        // ============================================
+        // 7. INITIALIZATION
+        // ============================================
+        window.addEventListener('DOMContentLoaded', () => {
+            console.log('🟢 [GUEST] Page loaded, initializing...');
+            initializeWebRTC();
+            loadFeedback();
+        });
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            if (peerConnection) {
+                peerConnection.close();
+            }
+            // Remove guest data from Firestore
+            db.collection('rooms').doc(roomId)
+                .collection('guests').doc(guestId)
+                .delete()
+                .catch(err => console.warn('Failed to cleanup guest data:', err));
+        });
+    </script>
+</body>
+</html>
