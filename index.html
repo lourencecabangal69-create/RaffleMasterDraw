@@ -966,12 +966,14 @@
             const offerRef = ref(realtimedb, `sessions/${sessionId}/offer`);
             
             return new Promise((resolve, reject) => {
+                let pc = null;
+                
                 onValue(offerRef, async (snapshot) => {
                     const offerData = snapshot.val();
                     if (!offerData || !offerData.sdp) return;
                     
                     // Create RTCPeerConnection
-                    const pc = new RTCPeerConnection({
+                    pc = new RTCPeerConnection({
                         iceServers: [
                             { urls: 'stun:stun.l.google.com:19302' },
                             { urls: 'stun:stun1.l.google.com:19302' }
@@ -981,11 +983,32 @@
                     // Handle remote track (screen stream)
                     let remoteStream;
                     pc.ontrack = (event) => {
+                        console.log('🎥 Received remote track:', event.streams[0]);
                         remoteStream = event.streams[0];
+                        if (guestVideo && guestVideo.srcObject !== remoteStream) {
+                            guestVideo.srcObject = remoteStream;
+                            console.log('✅ Video element updated with remote stream');
+                        }
                         resolve(remoteStream);
                     };
                     
-                    // Handle ICE candidates
+                    // Handle ICE candidates from host
+                    const hostIceRef = ref(realtimedb, `sessions/${sessionId}/offer/iceCandidates`);
+                    onValue(hostIceRef, async (iceSnapshot) => {
+                        const candidates = iceSnapshot.val();
+                        if (candidates && pc) {
+                            for (const key in candidates) {
+                                try {
+                                    const candidate = new RTCIceCandidate(candidates[key]);
+                                    await pc.addIceCandidate(candidate);
+                                } catch (e) {
+                                    console.warn('Failed to add ICE candidate:', e);
+                                }
+                            }
+                        }
+                    });
+                    
+                    // Handle ICE candidates to send to host
                     pc.onicecandidate = async (event) => {
                         if (event.candidate) {
                             const answerRef = ref(realtimedb, `sessions/${sessionId}/answer/iceCandidates`);
@@ -2590,7 +2613,11 @@
         // Connect to host's screen share via WebRTC
         if (typeof window.joinAsGuest === 'function') {
           window.joinAsGuest(sessionParam).then((stream) => {
-            guestVideo.srcObject = stream;
+            console.log('✅ Guest connected, stream received:', stream);
+            if (!guestVideo.srcObject) {
+              guestVideo.srcObject = stream;
+              console.log('🎥 Video srcObject set');
+            }
             liveIndicator.classList.remove('hidden');
             connectionStatus.textContent = 'Connected - Live';
             connectionStatus.style.color = '#ff4757';
