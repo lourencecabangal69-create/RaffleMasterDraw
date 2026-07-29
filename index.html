@@ -818,7 +818,7 @@
         } catch (err) { console.error("Failed to increment eliminated:", err); }
     };
 
-    // 4. CHAT LOGIC (Anti-spam & Live Comments)
+    // 4. CHAT LOGIC - Updated for Room-based structure
     let lastCommentTime = 0;
     const COOLDOWN_MS = 10000;
     let userId = localStorage.getItem('raffle_user_id') || ('anon_' + Math.random().toString(36).substr(2, 9));
@@ -827,7 +827,16 @@
     const savedNick = localStorage.getItem('raffle_nickname');
     if (savedNick) document.getElementById('feedback-nickname').value = savedNick;
 
-    const q = query(commentsCollection, orderBy("timestamp", "desc"), limit(50));
+    // Determine which collection to use based on URL params
+    const urlParams = new URLSearchParams(window.location.search);
+    const roomId = urlParams.get('room') || state.sessionId;
+    
+    // Use room-based comments if in a room, otherwise use global comments
+    const activeCommentsCollection = roomId 
+        ? collection(db, 'rooms', roomId, 'comments')
+        : commentsCollection;
+
+    const q = query(activeCommentsCollection, orderBy("timestamp", "desc"), limit(50));
     onSnapshot(q, (snapshot) => {
         const msgContainer = document.getElementById('feedback-messages');
         msgContainer.innerHTML = '';
@@ -839,7 +848,7 @@
             const data = doc.data();
             const msgDiv = document.createElement('div');
             msgDiv.className = 'feedback-msg';
-            let timeStr = data.timestamp ? data.timestamp.toDate().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '';
+            let timeStr = data.timestamp ? (data.timestamp.toDate ? data.timestamp.toDate().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '') : '';
             msgDiv.innerHTML = `<span class="time">${timeStr}</span><span class="nick">${escapeHTML(data.nickname)}:</span> ${escapeHTML(data.text)}`;
             msgContainer.appendChild(msgDiv);
         });
@@ -869,8 +878,13 @@
         lastCommentTime = now;
         setTimeout(() => { submitBtn.disabled = false; }, COOLDOWN_MS);
 
-        addDoc(commentsCollection, {
-            text: text, nickname: nickname, userId: userId, timestamp: serverTimestamp()
+        // Add comment to the active collection (room-based or global)
+        addDoc(activeCommentsCollection, {
+            text: text, 
+            nickname: nickname, 
+            userId: userId, 
+            timestamp: serverTimestamp(),
+            type: roomId ? 'host' : 'global'
         }).then(() => {
             document.getElementById('feedback-text').value = '';
         }).catch(err => {
