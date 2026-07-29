@@ -543,7 +543,7 @@
       messagingSenderId: "422199484986",
       appId: "1:422199484986:web:5619a9a670bffe246b0b03",
       measurementId: "G-XCHPLNR2YD",
-      databaseURL: "https://raffle-draw-app-alph1tech-default-rtdb.firebaseio.com/"
+      databaseURL: "https://raffle-draw-app-alph1tech-default-rtdb.asia-southeast1.firebasedatabase.app"
     };
 
     const app = initializeApp(firebaseConfig);
@@ -552,7 +552,7 @@
     // Initialize Realtime Database with try-catch to handle missing database gracefully
     let realtimedb = null;
     try {
-      realtimedb = getDatabase(app, "https://raffle-draw-app-alph1tech-default-rtdb.firebaseio.com/");
+      realtimedb = getDatabase(app, "https://raffle-draw-app-alph1tech-default-rtdb.asia-southeast1.firebasedatabase.app");
     } catch (error) {
       console.warn("Firebase Realtime Database not available. Screen sharing will be disabled.", error.message);
     }
