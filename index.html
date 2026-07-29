@@ -1289,6 +1289,19 @@
 (function(){
   'use strict';
 
+  // ---------------- Toast Notification Helper (Must be defined first) ----------------
+  function showToast(text, type) {
+    const toast = document.getElementById('toast');
+    if (toast) {
+      toast.textContent = text;
+      toast.classList.add('show');
+      setTimeout(function(){ toast.classList.remove('show'); }, 2600);
+    }
+  }
+  
+  // Expose showToast globally for use in other script blocks and event handlers
+  window.showToast = showToast;
+
   // ---------------- State ----------------
   let uidCounter = 1;
   function makeId(){ return 'e' + (uidCounter++); }
