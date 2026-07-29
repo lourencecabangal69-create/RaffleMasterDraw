@@ -1365,6 +1365,9 @@
   };
 
   // Session storage for winner view tracking
+  // Expose state globally for access by screen sharing and other modules
+  window.state = state;
+
   const SESSION_STORAGE_KEY = 'raffle_winner_viewed';
 
   // Save state to localStorage
