@@ -404,6 +404,30 @@
     </div>
   </div>
   
+  <!-- Guest View: Live Screen Share Video (Hidden by default, shown for guests) -->
+  <div id="guestScreenShareContainer" class="hidden" style="max-width: 1400px; margin: 16px auto; padding: 0 16px;">
+    <div class="panel" style="padding: 0; overflow: hidden; background: #000;">
+      <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; background: var(--surface-alt); border-bottom: 1px solid var(--border);">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-family: var(--font-display); font-size: 14px; color: var(--accent);">📺 Live Host Screen</span>
+          <span id="liveIndicator" class="hidden" style="display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: #ff4757; background: rgba(255, 71, 87, 0.1); padding: 2px 8px; border-radius: 10px;">
+            <span style="width: 6px; height: 6px; background: #ff4757; border-radius: 50%; animation: pulse 1s infinite;"></span>
+            LIVE
+          </span>
+        </div>
+        <span id="connectionStatus" style="font-size: 11px; color: var(--text-dim);">Connecting...</span>
+      </div>
+      <video id="guestVideo" autoplay playsinline style="width: 100%; display: block; background: #000;" muted></video>
+    </div>
+  </div>
+  
+  <style>
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+  </style>
+  
   <!-- Bottom Bar: Activity Logs + Contact -->
   <div style="max-width:1400px; margin:0 auto; padding:0 16px 16px; display:grid; grid-template-columns: 1fr auto; gap:12px; align-items:center;">
     <div class="panel" style="padding:10px 16px; display:flex; align-items:center; gap:24px;">
@@ -508,6 +532,7 @@
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
     import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, limit, serverTimestamp, doc, setDoc, increment, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+    import { getDatabase, ref, set, onValue, push, remove } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
     // 1. FIREBASE CONFIG (Make sure your actual keys are here!)
     const firebaseConfig = {
@@ -517,11 +542,13 @@
       storageBucket: "raffle-draw-app-alph1tech.firebasestorage.app",
       messagingSenderId: "422199484986",
       appId: "1:422199484986:web:5619a9a670bffe246b0b03",
-      measurementId: "G-XCHPLNR2YD"
+      measurementId: "G-XCHPLNR2YD",
+      databaseURL: "https://raffle-draw-app-alph1tech-default-rtdb.firebaseio.com"
     };
 
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
+    const realtimedb = getDatabase(app);
     const commentsCollection = collection(db, "raffle_comments");
     const statsDoc = doc(db, "stats", "global");
     const visitsDoc = doc(db, "visits", "global");
@@ -794,6 +821,178 @@
         div.appendChild(document.createTextNode(str));
         return div.innerHTML;
     }
+
+    // ============================================
+    // 5. SCREEN SHARING FOR GUEST VIEW (WebRTC)
+    // ============================================
+    
+    // Expose screen sharing functions to main script
+    window.startScreenShare = async function(sessionId) {
+        try {
+            // Request screen share from host
+            const stream = await navigator.mediaDevices.getDisplayMedia({
+                video: { 
+                    cursor: "always",
+                    frameRate: { ideal: 30, max: 60 },
+                    width: { ideal: 1920, max: 1920 },
+                    height: { ideal: 1080, max: 1080 }
+                },
+                audio: false
+            });
+            
+            // Create RTCPeerConnection
+            const pc = new RTCPeerConnection({
+                iceServers: [
+                    { urls: 'stun:stun.l.google.com:19302' },
+                    { urls: 'stun:stun1.l.google.com:19302' }
+                ]
+            });
+            
+            // Add screen track to peer connection
+            stream.getTracks().forEach(track => {
+                pc.addTrack(track, stream);
+            });
+            
+            // Handle ICE candidates - send to guest via Firebase
+            pc.onicecandidate = async (event) => {
+                if (event.candidate) {
+                    const offerRef = ref(realtimedb, `sessions/${sessionId}/offer/iceCandidates`);
+                    const newCandidateRef = push(offerRef);
+                    await set(newCandidateRef, event.candidate.toJSON());
+                }
+            };
+            
+            // Create and send offer
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+            
+            // Wait for ICE gathering to complete
+            await new Promise((resolve) => {
+                if (pc.iceGatheringState === 'complete') {
+                    resolve();
+                } else {
+                    pc.onicegatheringstatechange = () => {
+                        if (pc.iceGatheringState === 'complete') resolve();
+                    };
+                }
+            });
+            
+            // Send offer to Firebase
+            const sessionRef = ref(realtimedb, `sessions/${sessionId}`);
+            await set(sessionRef, {
+                hostActive: true,
+                offer: {
+                    type: pc.localDescription.type,
+                    sdp: pc.localDescription.sdp,
+                    iceCandidates: []
+                },
+                timestamp: Date.now()
+            });
+            
+            showToast('📺 Screen sharing started! Share the guest link.');
+            
+            // Listen for answer from guest
+            const answerRef = ref(realtimedb, `sessions/${sessionId}/answer`);
+            onValue(answerRef, async (snapshot) => {
+                const answerData = snapshot.val();
+                if (answerData && answerData.sdp) {
+                    const answer = new RTCSessionDescription(answerData);
+                    await pc.setRemoteDescription(answer);
+                    console.log('✅ Connected to guest viewer');
+                }
+            });
+            
+            // Handle stream end
+            stream.getVideoTracks()[0].onended = function() {
+                stopScreenShare(sessionId);
+            };
+            
+            return pc;
+        } catch (err) {
+            console.error('Screen share error:', err);
+            showToast('❌ Failed to start screen sharing');
+            throw err;
+        }
+    };
+    
+    window.stopScreenShare = async function(sessionId) {
+        try {
+            const sessionRef = ref(realtimedb, `sessions/${sessionId}`);
+            await set(sessionRef, null);
+            showToast('📺 Screen sharing stopped');
+        } catch (err) {
+            console.error('Stop screen share error:', err);
+        }
+    };
+    
+    window.joinAsGuest = async function(sessionId) {
+        try {
+            // Listen for host's offer
+            const offerRef = ref(realtimedb, `sessions/${sessionId}/offer`);
+            
+            return new Promise((resolve, reject) => {
+                onValue(offerRef, async (snapshot) => {
+                    const offerData = snapshot.val();
+                    if (!offerData || !offerData.sdp) return;
+                    
+                    // Create RTCPeerConnection
+                    const pc = new RTCPeerConnection({
+                        iceServers: [
+                            { urls: 'stun:stun.l.google.com:19302' },
+                            { urls: 'stun:stun1.l.google.com:19302' }
+                        ]
+                    });
+                    
+                    // Handle remote track (screen stream)
+                    let remoteStream;
+                    pc.ontrack = (event) => {
+                        remoteStream = event.streams[0];
+                        resolve(remoteStream);
+                    };
+                    
+                    // Handle ICE candidates
+                    pc.onicecandidate = async (event) => {
+                        if (event.candidate) {
+                            const answerRef = ref(realtimedb, `sessions/${sessionId}/answer/iceCandidates`);
+                            const newCandidateRef = push(answerRef);
+                            await set(newCandidateRef, event.candidate.toJSON());
+                        }
+                    };
+                    
+                    // Set remote description (host's offer)
+                    await pc.setRemoteDescription(new RTCSessionDescription(offerData));
+                    
+                    // Create answer
+                    const answer = await pc.createAnswer();
+                    await pc.setLocalDescription(answer);
+                    
+                    // Wait for ICE gathering
+                    await new Promise((resolveIce) => {
+                        if (pc.iceGatheringState === 'complete') {
+                            resolveIce();
+                        } else {
+                            pc.onicegatheringstatechange = () => {
+                                if (pc.iceGatheringState === 'complete') resolveIce();
+                            };
+                        }
+                    });
+                    
+                    // Send answer to host
+                    const answerRef = ref(realtimedb, `sessions/${sessionId}/answer`);
+                    await set(answerRef, {
+                        type: pc.localDescription.type,
+                        sdp: pc.localDescription.sdp
+                    });
+                    
+                    console.log('✅ Connected to host screen share');
+                }, { onlyOnce: false });
+            });
+        } catch (err) {
+            console.error('Guest join error:', err);
+            showToast('❌ Failed to join screen share');
+            throw err;
+        }
+    };
 </script>
   <!-- Winner Display Modal -->
   <div id="winnerModal" class="modal-overlay">
@@ -1005,12 +1204,28 @@
         <button type="button" class="btn btn-ghost btn-small danger-arm" id="resetThemeColorsBtn">Reset Colors to Theme Defaults</button>
       </div>
 
-      <!-- Sharing Tab - Fix #7: Guest View -->
+      <!-- Sharing Tab - Fix #7: Guest View + Screen Sharing -->
       <div class="tab-content" id="sharingTab">
         <div class="setting-group">
+          <div class="setting-label">📺 Live Screen Share (NEW)</div>
+          <p style="font-size: 13px; color: var(--text-dim); margin-bottom: 12px;">
+            Share your screen live with guests! They'll see exactly what you see in real-time.
+          </p>
+          <button type="button" id="startScreenShareBtn" class="btn btn-primary btn-large" style="width: 100%; margin-bottom: 12px;">
+            🎥 Start Screen Sharing
+          </button>
+          <button type="button" id="stopScreenShareBtn" class="btn btn-ghost btn-small danger-arm hidden" style="width: 100%;">
+            ⏹️ Stop Screen Sharing
+          </button>
+          <p id="screenShareStatus" style="font-size: 12px; color: var(--accent-2); margin-top: 8px; display: none;">
+            🔴 Live - Guests can now view your screen
+          </p>
+        </div>
+        
+        <div class="setting-group" style="margin-top: 20px; border-top: 1px solid #333; padding-top: 15px;">
           <div class="setting-label">📋 Share Your Raffle Session</div>
           <p style="font-size: 13px; color: var(--text-dim); margin-bottom: 12px;">
-            Share this link with guests. They will be able to <strong>view only</strong> (no editing/drawing).
+            Share this link with guests. They will be able to <strong>view only</strong> (no editing/drawing) and watch your screen share.
           </p>
           <div style="display: flex; gap: 8px; margin-bottom: 12px;">
             <input type="text" id="shareLinkInput" class="input" readonly style="flex: 1; font-size: 12px;" />
@@ -1025,8 +1240,9 @@
             Current mode: <strong id="currentViewMode">Host (Full Control)</strong>
           </p>
           <p style="font-size: 11px; color: var(--text-dim); margin-top: 8px;">
-            • Host can add names, draw winners, edit settings<br>
-            • Guests can only view the wheel, winners, and activity logs
+            • Host can add names, draw winners, edit settings, share screen<br>
+            • Guests can view the wheel, winners, activity logs, and LIVE SCREEN SHARE<br>
+            • Guests can still send comments and feedback
           </p>
         </div>
       </div>
@@ -2317,6 +2533,31 @@
         listenToSessionState(sessionParam);
       }
       
+      // Show screen share container for guests and connect to host stream
+      const guestScreenShareContainer = document.getElementById('guestScreenShareContainer');
+      const guestVideo = document.getElementById('guestVideo');
+      const liveIndicator = document.getElementById('liveIndicator');
+      const connectionStatus = document.getElementById('connectionStatus');
+      
+      if (guestScreenShareContainer && guestVideo) {
+        guestScreenShareContainer.classList.remove('hidden');
+        connectionStatus.textContent = 'Waiting for host to start sharing...';
+        
+        // Connect to host's screen share via WebRTC
+        if (typeof window.joinAsGuest === 'function') {
+          window.joinAsGuest(sessionParam).then((stream) => {
+            guestVideo.srcObject = stream;
+            liveIndicator.classList.remove('hidden');
+            connectionStatus.textContent = 'Connected - Live';
+            connectionStatus.style.color = '#ff4757';
+            showToast('📺 Connected to host screen share!');
+          }).catch((err) => {
+            console.error('Failed to join screen share:', err);
+            connectionStatus.textContent = 'Not connected (host not sharing)';
+          });
+        }
+      }
+      
       showToast('You are in Guest View mode');
     } else {
       state.isGuest = false;
@@ -2326,6 +2567,41 @@
       if (currentViewModeEl) {
         currentViewModeEl.textContent = 'Host (Full Control)';
         currentViewModeEl.style.color = 'var(--text)';
+      }
+      
+      // Host: Setup screen share buttons
+      const startScreenShareBtn = document.getElementById('startScreenShareBtn');
+      const stopScreenShareBtn = document.getElementById('stopScreenShareBtn');
+      const screenShareStatus = document.getElementById('screenShareStatus');
+      
+      if (startScreenShareBtn && stopScreenShareBtn) {
+        startScreenShareBtn.addEventListener('click', async function() {
+          try {
+            if (typeof window.startScreenShare === 'function') {
+              await window.startScreenShare(state.sessionId);
+              startScreenShareBtn.classList.add('hidden');
+              stopScreenShareBtn.classList.remove('hidden');
+              if (screenShareStatus) screenShareStatus.style.display = 'block';
+              showToast('🎥 Screen sharing started!');
+            }
+          } catch (err) {
+            console.error('Failed to start screen share:', err);
+          }
+        });
+        
+        stopScreenShareBtn.addEventListener('click', async function() {
+          try {
+            if (typeof window.stopScreenShare === 'function') {
+              await window.stopScreenShare(state.sessionId);
+              stopScreenShareBtn.classList.add('hidden');
+              startScreenShareBtn.classList.remove('hidden');
+              if (screenShareStatus) screenShareStatus.style.display = 'none';
+              showToast('🛑 Screen sharing stopped');
+            }
+          } catch (err) {
+            console.error('Failed to stop screen share:', err);
+          }
+        });
       }
     }
 
