@@ -543,12 +543,14 @@
       messagingSenderId: "422199484986",
       appId: "1:422199484986:web:5619a9a670bffe246b0b03",
       measurementId: "G-XCHPLNR2YD",
-      databaseURL: "https://raffle-draw-app-alph1tech-default-rtdb.firebaseio.com"
+      databaseURL: "https://raffle-draw-app-alph1tech-default-rtdb.firebaseio.com/"
     };
 
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
-    const realtimedb = getDatabase(app);
+    
+    // Initialize Realtime Database with explicit URL to avoid warnings
+    const realtimedb = getDatabase(app, "https://raffle-draw-app-alph1tech-default-rtdb.firebaseio.com/");
     const commentsCollection = collection(db, "raffle_comments");
     const statsDoc = doc(db, "stats", "global");
     const visitsDoc = doc(db, "visits", "global");
