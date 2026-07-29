@@ -994,12 +994,25 @@
         }
         
         try {
-            // Listen for host's offer
+            // First check if offer already exists
             const offerRef = ref(realtimedb, `sessions/${sessionId}/offer`);
             console.log('🔵 [WEBRTC] Listening for host offer at:', offerRef.toString());
             
+            // Check for existing offer first
+            const snapshot = await get(offerRef);
+            const existingOffer = snapshot.val();
+            console.log('🟡 [WEBRTC] Initial offer check:', existingOffer ? 'OFFER FOUND' : 'NO OFFER YET');
+            
+            if (existingOffer && existingOffer.sdp) {
+                console.log('🔵 [WEBRTC] Processing existing offer immediately...');
+                // Just log for now - the onValue listener will handle it
+                // to avoid duplicate processing
+            }
+            
+            // Then continue listening for updates
             return new Promise((resolve, reject) => {
                 let pc = null;
+                let guestAnswered = false;
                 
                 onValue(offerRef, async (snapshot) => {
                     const offerData = snapshot.val();
@@ -1007,6 +1020,13 @@
                         console.log('🟡 [WEBRTC] Waiting for valid offer from host...');
                         return;
                     }
+                    
+                    // Prevent duplicate processing
+                    if (guestAnswered) {
+                        console.log('🟡 [WEBRTC] Already processed this offer, skipping');
+                        return;
+                    }
+                    guestAnswered = true;
                     
                     console.log('🟢 [WEBRTC] Received offer from host');
                     
