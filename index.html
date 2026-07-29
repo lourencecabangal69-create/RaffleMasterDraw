@@ -658,6 +658,23 @@
         });
     }
 
+    // ============================================
+    // 5. SCREEN SHARING FOR GUEST VIEW (WebRTC)
+    // ============================================
+
+    // Helper function for toast notifications (defined early for screen sharing)
+    function showToast(text, type) {
+        const toast = document.getElementById('toast');
+        if (toast) {
+            toast.textContent = text;
+            toast.classList.add('show');
+            setTimeout(function(){ toast.classList.remove('show'); }, 2600);
+        }
+    }
+    
+    // Expose showToast globally for use in other script blocks
+    window.showToast = showToast;
+
     // 2b. GLOBAL VISITS & COUNTRY TRACKING
     let globalVisitCount = 0;
     let countryStats = {};
@@ -832,16 +849,6 @@
     // ============================================
     // 5. SCREEN SHARING FOR GUEST VIEW (WebRTC)
     // ============================================
-
-    // Helper function for toast notifications (defined early for screen sharing)
-    function showToast(text, type) {
-        const toast = document.getElementById('toast');
-        if (toast) {
-            toast.textContent = text;
-            toast.classList.add('show');
-            setTimeout(function(){ toast.classList.remove('show'); }, 2600);
-        }
-    }
 
     window.startScreenShare = async function(sessionId) {
         // Check if Realtime Database is available
