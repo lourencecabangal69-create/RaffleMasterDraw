@@ -1055,111 +1055,11 @@
             throw err;
         }
     };
-                
-            } else {
-                // Fallback to manual WebRTC with Firebase signaling
-                console.log('🔵 [WEBRTC] Using manual Firebase signaling (PeerJS not available)');
-                
-                // Create RTCPeerConnection
-                const pc = new RTCPeerConnection({
-                    iceServers: [
-                        { urls: 'stun:stun.l.google.com:19302' },
-                        { urls: 'stun:stun1.l.google.com:19302' }
-                    ]
-                });
-                console.log('🔵 [WEBRTC] PeerConnection created');
-                
-                // Add screen track to peer connection
-                stream.getTracks().forEach(track => {
-                    pc.addTrack(track, stream);
-                    console.log('🔵 [WEBRTC] Added track:', track.kind, track.label);
-                });
-                
-                // Handle ICE candidates - send to guest via Firebase
-                pc.onicecandidate = async (event) => {
-                    if (event.candidate) {
-                        console.log('🔵 [WEBRTC] ICE candidate generated');
-                        const offerRef = ref(realtimedb, `sessions/${sessionId}/offer/iceCandidates`);
-                        const newCandidateRef = push(offerRef);
-                        await set(newCandidateRef, event.candidate.toJSON());
-                    }
-                };
-                
-                // Handle connection state changes
-                pc.onconnectionstatechange = () => {
-                    console.log('🔵 [WEBRTC] Connection state:', pc.connectionState);
-                };
-                
-                pc.oniceconnectionstatechange = () => {
-                    console.log('🔵 [WEBRTC] ICE connection state:', pc.iceConnectionState);
-                };
-                
-                // Create and send offer
-                const offer = await pc.createOffer();
-                await pc.setLocalDescription(offer);
-                console.log('🔵 [WEBRTC] Local description set, gathering ICE...');
-                
-                // Wait for ICE gathering to complete
-                await new Promise((resolve) => {
-                    if (pc.iceGatheringState === 'complete') {
-                        resolve();
-                    } else {
-                        pc.onicegatheringstatechange = () => {
-                            if (pc.iceGatheringState === 'complete') {
-                                console.log('🟢 [WEBRTC] ICE gathering complete');
-                                resolve();
-                            }
-                        };
-                    }
-                });
-                
-                // Send offer to Firebase
-                console.log('🔵 [WEBRTC] Writing offer to Firebase...');
-                const sessionRef = ref(realtimedb, `sessions/${sessionId}`);
-                await set(sessionRef, {
-                    hostActive: true,
-                    offer: {
-                        type: pc.localDescription.type,
-                        sdp: pc.localDescription.sdp,
-                        iceCandidates: []
-                    },
-                    timestamp: Date.now()
-                });
-                console.log('🟢 [WEBRTC] Offer written to Firebase');
-            
-            showToast('📺 Screen sharing started! Share the guest link.');
-            
-            // Listen for answer from guest
-            console.log('🔵 [WEBRTC] Listening for guest answer...');
-            const answerRef = ref(realtimedb, `sessions/${sessionId}/answer`);
-            onValue(answerRef, async (snapshot) => {
-                const answerData = snapshot.val();
-                if (answerData && answerData.sdp) {
-                    console.log('🟢 [WEBRTC] Received answer from guest');
-                    const answer = new RTCSessionDescription(answerData);
-                    await pc.setRemoteDescription(answer);
-                    console.log('✅ [WEBRTC] Connected to guest viewer');
-                }
-            });
-            
-            // Handle stream end
-            stream.getVideoTracks()[0].onended = function() {
-                console.log('🔵 [WEBRTC] Screen share track ended');
-                stopScreenShare(sessionId);
-            };
-            
-            return pc;
-        } catch (err) {
-            console.error('🔴 [WEBRTC] Screen share error:', err);
-            showToast('❌ Failed to start screen sharing');
-            throw err;
-        }
-    };
     
-    window.stopScreenShare = async function(sessionId) {
+    window.stopScreenShare = async function(roomId) {
         try {
-            const sessionRef = ref(realtimedb, `sessions/${sessionId}`);
-            await set(sessionRef, null);
+            const roomRef = doc(db, `rooms/${roomId}`);
+            await setDoc(roomRef, { hostActive: false }, { merge: true });
             showToast('📺 Screen sharing stopped');
         } catch (err) {
             console.error('Stop screen share error:', err);
