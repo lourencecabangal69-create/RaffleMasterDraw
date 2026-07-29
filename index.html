@@ -551,10 +551,29 @@
     
     // Initialize Realtime Database with try-catch to handle missing database gracefully
     let realtimedb = null;
+    let realtimedbInitialized = false;
     try {
       realtimedb = getDatabase(app, "https://raffle-draw-app-alph1tech-default-rtdb.asia-southeast1.firebasedatabase.app");
       console.log('🟢 [FIREBASE] Realtime Database initialized successfully');
       console.log('🟢 [FIREBASE] Database URL:', realtimedb.app.options.databaseURL);
+      
+      // Test database connectivity
+      const testRef = ref(realtimedb, '.info/connected');
+      onValue(testRef, (snapshot) => {
+        realtimedbInitialized = true;
+        if (snapshot.val() === true) {
+          console.log('🟢 [FIREBASE] ✅ Connected to Realtime Database server');
+        } else {
+          console.warn('🟡 [FIREBASE] ⚠️ Disconnected from Realtime Database server');
+        }
+      }, { onlyOnce: true });
+      
+      setTimeout(() => {
+        if (!realtimedbInitialized) {
+          console.warn('🟡 [FIREBASE] ⚠️ Realtime Database connection timeout - check security rules');
+        }
+      }, 5000);
+      
     } catch (error) {
       console.error('🔴 [FIREBASE] Failed to initialize Realtime Database:', error.message);
       console.warn("Firebase Realtime Database not available. Screen sharing will be disabled.");
