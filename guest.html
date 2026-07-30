@@ -270,10 +270,14 @@
     <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
+    
+    <!-- PeerJS for WebRTC (simplifies P2P connections) -->
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 
     <script>
         // ============================================
-        // 1. FIREBASE CONFIGURATION
+        // 1. FIREBASE CONFIGURATION - FIXED
         // ============================================
         const firebaseConfig = {
             apiKey: "AIzaSyBvqNqz3xQYKZ9kMqPqGqJqKqLqMqNqOqP",
@@ -285,9 +289,17 @@
             appId: "1:123456789012:web:abcdef1234567890"
         };
 
-        firebase.initializeApp(firebaseConfig);
-        const db = firebase.firestore();
-        console.log('🟢 [FIREBASE] Initialized successfully');
+        try {
+            firebase.initializeApp(firebaseConfig);
+            const db = firebase.firestore();
+            const realtimedb = firebase.database();
+            console.log('🟢 [FIREBASE] Initialized successfully');
+            console.log('🟢 [FIREBASE] Firestore:', db !== null);
+            console.log('🟢 [FIREBASE] Realtime DB:', realtimedb !== null);
+        } catch (err) {
+            console.error('🔴 [FIREBASE] Initialization failed:', err);
+            showError('Failed to initialize Firebase: ' + err.message);
+        }
 
         // ============================================
         // 2. URL PARAMETER PARSING
@@ -304,10 +316,11 @@
         console.log(`🟢 [GUEST] Joined room: ${roomId}, Guest ID: ${guestId}`);
 
         // ============================================
-        // 3. WEBRTC SETUP
+        // 3. WEBRTC SETUP - IMPROVED WITH DUAL MODE
         // ============================================
         let peerConnection = null;
         let remoteStream = null;
+        let peerjsPeer = null;
 
         const iceServers = {
             iceServers: [
@@ -318,58 +331,133 @@
 
         async function initializeWebRTC() {
             try {
-                console.log('🔵 [WEBRTC] Initializing PeerConnection...');
+                console.log('🔵 [WEBRTC] Initializing connection...');
                 updateStatus('connecting', 'Connecting to host...');
 
-                peerConnection = new RTCPeerConnection(iceServers);
-
-                // Handle remote stream
-                peerConnection.ontrack = (event) => {
-                    console.log('🟢 [WEBRTC] Received remote track:', event.track.kind);
-                    if (event.streams && event.streams[0]) {
-                        remoteStream = event.streams[0];
-                        const videoElement = document.getElementById('guestVideo');
-                        videoElement.srcObject = remoteStream;
-                        document.getElementById('waitingMessage').style.display = 'none';
-                        updateStatus('connected', 'Live');
-                        console.log('🟢 [WEBRTC] Stream attached to video element');
-                    }
-                };
-
-                // Handle ICE candidates
-                peerConnection.onicecandidate = async (event) => {
-                    if (event.candidate) {
-                        console.log('🔵 [WEBRTC] ICE candidate generated');
-                        try {
-                            await db.collection('rooms').doc(roomId)
-                                .collection('guests').doc(guestId)
-                                .collection('iceCandidates').add({
-                                    candidate: event.candidate.toJSON(),
-                                    timestamp: firebase.firestore.FieldValue.serverTimestamp()
-                                });
-                        } catch (err) {
-                            console.error('🔴 [WEBRTC] Failed to send ICE candidate:', err);
-                        }
-                    }
-                };
-
-                peerConnection.onconnectionstatechange = () => {
-                    console.log('🔵 [WEBRTC] Connection state:', peerConnection.connectionState);
-                    if (peerConnection.connectionState === 'connected') {
-                        updateStatus('connected', 'Live');
-                    } else if (peerConnection.connectionState === 'disconnected' || 
-                               peerConnection.connectionState === 'failed') {
-                        updateStatus('disconnected', 'Reconnecting...');
-                    }
-                };
-
-                // Listen for host offer
-                listenForOffer();
+                // Try PeerJS first (simpler, more reliable)
+                if (typeof Peer !== 'undefined') {
+                    await initializePeerJS();
+                } else {
+                    // Fallback to manual WebRTC with Firestore signaling
+                    await initializeManualWebRTC();
+                }
 
             } catch (err) {
                 console.error('🔴 [WEBRTC] Initialization failed:', err);
                 showError('Failed to initialize video connection: ' + err.message);
                 updateStatus('disconnected', 'Connection failed');
+            }
+        }
+
+        async function initializePeerJS() {
+            console.log('🔵 [PEERJS] Attempting PeerJS connection...');
+            
+            return new Promise((resolve, reject) => {
+                try {
+                    peerjsPeer = new Peer(null, { debug: 2 });
+                    
+                    peerjsPeer.on('open', (id) => {
+                        console.log('🟢 [PEERJS] Guest peer opened:', id);
+                        
+                        // Call the host using roomId
+                        const call = peerjsPeer.call(roomId);
+                        
+                        call.on('stream', (remoteStream) => {
+                            console.log('🟢 [PEERJS] Received screen stream!');
+                            handleRemoteStream(remoteStream);
+                            resolve();
+                        });
+                        
+                        call.on('close', () => {
+                            console.log('🔵 [PEERJS] Host ended sharing');
+                            updateStatus('disconnected', 'Host ended');
+                            showToast('Host ended screen sharing');
+                        });
+                        
+                        call.on('error', (err) => {
+                            console.error('🔴 [PEERJS] Call error:', err);
+                            reject(err);
+                        });
+                    });
+                    
+                    peerjsPeer.on('error', (err) => {
+                        console.error('🔴 [PEERJS] Peer error:', err);
+                        // Fall back to manual WebRTC
+                        console.log('🔵 [WEBRTC] Falling back to manual signaling...');
+                        initializeManualWebRTC().then(resolve).catch(reject);
+                    });
+                    
+                    // Timeout after 5 seconds
+                    setTimeout(() => {
+                        if (!remoteStream) {
+                            console.log('⏱️ [PEERJS] Timeout, trying manual WebRTC...');
+                            initializeManualWebRTC().then(resolve).catch(reject);
+                        }
+                    }, 5000);
+                    
+                } catch (err) {
+                    console.error('🔴 [PEERJS] Setup failed:', err);
+                    initializeManualWebRTC().then(resolve).catch(reject);
+                }
+            });
+        }
+
+        async function initializeManualWebRTC() {
+            console.log('🔵 [WEBRTC] Starting manual WebRTC setup...');
+            
+            peerConnection = new RTCPeerConnection(iceServers);
+            console.log('🔵 [WEBRTC] PeerConnection created');
+
+            // Handle remote stream
+            peerConnection.ontrack = (event) => {
+                console.log('🎥 [WEBRTC] Received remote track:', event.track.kind);
+                if (event.streams && event.streams[0]) {
+                    handleRemoteStream(event.streams[0]);
+                }
+            };
+
+            // Handle ICE candidates
+            peerConnection.onicecandidate = async (event) => {
+                if (event.candidate) {
+                    console.log('🔵 [WEBRTC] ICE candidate generated');
+                    try {
+                        await db.collection('rooms').doc(roomId)
+                            .collection('guests').doc(guestId)
+                            .collection('iceCandidates').add({
+                                candidate: event.candidate.toJSON(),
+                                timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                            });
+                    } catch (err) {
+                        console.error('🔴 [WEBRTC] Failed to send ICE candidate:', err);
+                    }
+                }
+            };
+
+            peerConnection.onconnectionstatechange = () => {
+                console.log('🔵 [WEBRTC] Connection state:', peerConnection.connectionState);
+                if (peerConnection.connectionState === 'connected') {
+                    updateStatus('connected', 'Live');
+                } else if (peerConnection.connectionState === 'disconnected' || 
+                           peerConnection.connectionState === 'failed') {
+                    updateStatus('disconnected', 'Reconnecting...');
+                }
+            };
+
+            // Listen for host offer
+            await listenForOffer();
+        }
+
+        function handleRemoteStream(stream) {
+            remoteStream = stream;
+            const videoElement = document.getElementById('guestVideo');
+            if (videoElement) {
+                videoElement.srcObject = remoteStream;
+                videoElement.play().catch(err => {
+                    console.error('Error playing video:', err);
+                });
+                document.getElementById('waitingMessage').style.display = 'none';
+                updateStatus('connected', 'Live');
+                console.log('🟢 [WEBRTC] Stream attached and playing');
             }
         }
 

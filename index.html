@@ -818,7 +818,7 @@
         } catch (err) { console.error("Failed to increment eliminated:", err); }
     };
 
-    // 4. CHAT LOGIC - Updated for Room-based structure
+    // 4. CHAT LOGIC - Fixed Room-based Structure with Fallback
     let lastCommentTime = 0;
     const COOLDOWN_MS = 10000;
     let userId = localStorage.getItem('raffle_user_id') || ('anon_' + Math.random().toString(36).substr(2, 9));
@@ -829,16 +829,37 @@
 
     // Determine which collection to use based on URL params
     const urlParams = new URLSearchParams(window.location.search);
-    const roomId = urlParams.get('room') || state.sessionId;
+    const roomId = urlParams.get('room') || urlParams.get('session') || state.sessionId;
     
-    // Use room-based comments if in a room, otherwise use global comments
-    const activeCommentsCollection = roomId 
-        ? collection(db, 'rooms', roomId, 'comments')
-        : commentsCollection;
+    // FIX: Use room-based comments consistently - fallback to global if no room
+    let activeCommentsCollection;
+    let commentsQuery;
+    
+    try {
+        if (roomId && roomId !== 'default') {
+            // Room-based comments (for guest viewing)
+            activeCommentsCollection = collection(db, 'rooms', roomId, 'comments');
+            console.log('🟢 [FEEDBACK] Using room-based comments:', roomId);
+        } else {
+            // Global comments (standalone mode)
+            activeCommentsCollection = commentsCollection;
+            console.log('🟢 [FEEDBACK] Using global comments');
+        }
+        
+        // Create query with error handling
+        commentsQuery = query(activeCommentsCollection, orderBy("timestamp", "desc"), limit(50));
+    } catch (err) {
+        console.error('🔴 [FEEDBACK] Error setting up collection:', err);
+        // Fallback to global comments
+        activeCommentsCollection = commentsCollection;
+        commentsQuery = query(activeCommentsCollection, orderBy("timestamp", "desc"), limit(50));
+    }
 
-    const q = query(activeCommentsCollection, orderBy("timestamp", "desc"), limit(50));
-    onSnapshot(q, (snapshot) => {
+    // Listen for real-time feedback updates
+    const unsubscribeFeedback = onSnapshot(commentsQuery, (snapshot) => {
         const msgContainer = document.getElementById('feedback-messages');
+        if (!msgContainer) return;
+        
         msgContainer.innerHTML = '';
         if (snapshot.empty) {
             msgContainer.innerHTML = '<p class="feedback-placeholder">No comments yet. Be the first to drop a message!</p>';
@@ -852,7 +873,19 @@
             msgDiv.innerHTML = `<span class="time">${timeStr}</span><span class="nick">${escapeHTML(data.nickname)}:</span> ${escapeHTML(data.text)}`;
             msgContainer.appendChild(msgDiv);
         });
+    }, (error) => {
+        console.error('🔴 [FEEDBACK] Snapshot error:', error);
+        // If permission error, show message but don't break
+        if (error.code === 'permission-denied') {
+            const msgContainer = document.getElementById('feedback-messages');
+            if (msgContainer) {
+                msgContainer.innerHTML = '<p class="feedback-placeholder">🔒 Feedback requires database access. Contact host.</p>';
+            }
+        }
     });
+    
+    // Store unsubscribe function for cleanup
+    window.unsubscribeFeedback = unsubscribeFeedback;
 
     document.getElementById('feedback-submit').addEventListener('click', () => {
         let nickname = document.getElementById('feedback-nickname').value.trim();
@@ -884,12 +917,18 @@
             nickname: nickname, 
             userId: userId, 
             timestamp: serverTimestamp(),
-            type: roomId ? 'host' : 'global'
+            roomId: roomId || null,
+            type: roomId ? 'room' : 'global'
         }).then(() => {
             document.getElementById('feedback-text').value = '';
+            console.log('🟢 [FEEDBACK] Message sent successfully');
         }).catch(err => {
-            console.error("Error posting comment: ", err);
-            alert("Failed to send message.");
+            console.error("🔴 [FEEDBACK] Error posting comment: ", err);
+            if (err.code === 'permission-denied') {
+                alert("❌ Permission denied: Cannot send messages. Host needs to check Firebase security rules.");
+            } else {
+                alert("Failed to send message: " + err.message);
+            }
             submitBtn.disabled = false;
         });
     });
@@ -2870,23 +2909,45 @@
         guestScreenShareContainer.classList.remove('hidden');
         connectionStatus.textContent = 'Waiting for host to start sharing...';
         
-        // Connect to host's screen share via WebRTC
-        if (typeof window.joinAsGuest === 'function') {
-          window.joinAsGuest(sessionParam).then((stream) => {
-            console.log('✅ Guest connected, stream received:', stream);
-            if (!guestVideo.srcObject) {
-              guestVideo.srcObject = stream;
-              console.log('🎥 Video srcObject set');
+        // FIX: Improved WebRTC connection with retry logic
+        let connectionAttempts = 0;
+        const maxAttempts = 3;
+        
+        async function tryConnect() {
+          connectionAttempts++;
+          console.log(`🔵 [GUEST] Connection attempt ${connectionAttempts}/${maxAttempts}`);
+          
+          try {
+            if (typeof window.joinAsGuest === 'function') {
+              const stream = await window.joinAsGuest(sessionParam);
+              console.log('✅ Guest connected, stream received:', stream);
+              if (!guestVideo.srcObject) {
+                guestVideo.srcObject = stream;
+                console.log('🎥 Video srcObject set');
+              }
+              liveIndicator.classList.remove('hidden');
+              connectionStatus.textContent = 'Connected - Live';
+              connectionStatus.style.color = '#ff4757';
+              showToast('📺 Connected to host screen share!');
+              return true;
             }
-            liveIndicator.classList.remove('hidden');
-            connectionStatus.textContent = 'Connected - Live';
-            connectionStatus.style.color = '#ff4757';
-            showToast('📺 Connected to host screen share!');
-          }).catch((err) => {
-            console.error('Failed to join screen share:', err);
-            connectionStatus.textContent = 'Not connected (host not sharing)';
-          });
+          } catch (err) {
+            console.error(`🔴 [GUEST] Connection attempt ${connectionAttempts} failed:`, err);
+            
+            if (connectionAttempts < maxAttempts) {
+              // Wait before retrying
+              await new Promise(resolve => setTimeout(resolve, 2000 * connectionAttempts));
+              return tryConnect();
+            } else {
+              connectionStatus.textContent = 'Not connected (host not sharing or connection failed)';
+              showToast('❌ Failed to connect after ' + maxAttempts + ' attempts');
+              return false;
+            }
+          }
         }
+        
+        // Start connection
+        tryConnect();
       }
       
       showToast('You are in Guest View mode');
