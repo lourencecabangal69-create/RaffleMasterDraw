@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Guest View - Raffle Master Draw</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            color: #fff;
+        }
+
+        .header {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            backdrop-filter: blur(10px);
+        }
+
+        .header h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            font-size: 0.9rem;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #ffd700;
+            animation: pulse 2s infinite;
+        }
+
+        .status-dot.connected {
+            background: #4ade80;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .main-content {
+            flex: 1;
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 1rem;
+            padding: 1rem;
+            max-width: 1600px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        .video-section {
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 12px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .video-header {
+            padding: 1rem;
+            background: rgba(255, 255, 255, 0.1);
+            font-weight: 600;
+        }
+
+        .video-container {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #000;
+            min-height: 400px;
+            position: relative;
+        }
+
+        #guestVideo {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        .waiting-message {
+            position: absolute;
+            text-align: center;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .waiting-message h3 {
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .feedback-section {
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 12px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .feedback-header {
+            padding: 1rem;
+            background: rgba(255, 255, 255, 0.1);
+            font-weight: 600;
+        }
+
+        .feedback-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .feedback-item {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 0.75rem;
+            border-radius: 8px;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .feedback-nickname {
+            font-weight: 600;
+            color: #fbbf24;
+            margin-bottom: 0.25rem;
+            font-size: 0.9rem;
+        }
+
+        .feedback-text {
+            color: #fff;
+            line-height: 1.4;
+        }
+
+        .feedback-form {
+            padding: 1rem;
+            background: rgba(255, 255, 255, 0.05);
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .feedback-form input,
+        .feedback-form textarea {
+            padding: 0.75rem;
+            border: none;
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.9);
+            color: #333;
+            font-family: inherit;
+        }
+
+        .feedback-form textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        .feedback-form button {
+            padding: 0.75rem;
+            background: #fbbf24;
+            color: #000;
+            border: none;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .feedback-form button:hover {
+            background: #f59e0b;
+        }
+
+        .feedback-form button:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+        }
+
+        .error-message {
+            background: rgba(239, 68, 68, 0.9);
+            padding: 1rem;
+            text-align: center;
+            display: none;
+        }
+
+        .error-message.show {
+            display: block;
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+
+            .video-container {
+                min-height: 300px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🎬 Guest View - Raffle Master Draw</h1>
+        <div class="status-indicator">
+            <div class="status-dot" id="statusDot"></div>
+            <span id="statusText">Connecting...</span>
+        </div>
+    </div>
+
+    <div class="error-message" id="errorMessage"></div>
+
+    <div class="main-content">
+        <div class="video-section">
+            <div class="video-header">📺 Live Host Screen</div>
+            <div class="video-container">
+                <video id="guestVideo" autoplay playsinline></video>
+                <div class="waiting-message" id="waitingMessage">
+                    <h3>⏳ Waiting for host to start sharing...</h3>
+                    <p>The host will begin screen sharing shortly</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="feedback-section">
+            <div class="feedback-header">💬 Live Feedback & Shoutouts</div>
+            <div class="feedback-list" id="feedbackList">
+                <!-- Feedback items will be loaded here -->
+            </div>
+            <div class="feedback-form">
+                <input type="text" id="feedbackNickname" placeholder="Your nickname (optional)" />
+                <textarea id="feedbackText" placeholder="Send your feedback or shoutout..."></textarea>
+                <button id="sendFeedbackBtn">Send Message</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
+
+    <!-- PeerJS: handles WebRTC signaling + offer/answer/ICE for us -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.2/peerjs.min.js"></script>
+
+<script>
+  // --- CONFIGURATION ---
+  const urlParams = new URLSearchParams(window.location.search);
+  const roomId = urlParams.get('room') || urlParams.get('session');
+  
+  if (!roomId) {
+    alert("Error: No Room ID found in URL. Please join from the host link.");
+    throw new Error("No Room ID");
+  }
+
+  // console.log(`🟢 [GUEST] Joining room: ${roomId}`);
+
+  // --- DOM ELEMENTS ---
+  const remoteVideo = document.getElementById('guestVideo'); // matches the actual <video id="guestVideo"> tag
+  const statusText = document.getElementById('statusText');
+  const statusDot = document.getElementById('statusDot');
+  const waitingMessage = document.getElementById('waitingMessage');
+  const errorMessage = document.getElementById('errorMessage');
+
+  // Ensure video element has correct attributes for auto-play
+  if (remoteVideo) {
+    remoteVideo.setAttribute('playsinline', 'true');
+    remoteVideo.setAttribute('autoplay', 'true');
+    remoteVideo.setAttribute('muted', 'true');
+    // Setting the attribute alone isn't always enough — browsers check the
+    // live IDL property at play() time, so set it directly too.
+    remoteVideo.muted = true;
+    remoteVideo.defaultMuted = true;
+    remoteVideo.playsInline = true;
+    remoteVideo.style.objectFit = 'contain';
+    remoteVideo.style.width = '100%';
+    remoteVideo.style.height = '100%';
+    remoteVideo.style.background = '#000';
+  }
+
+  function updateStatus(msg, color = '#fff') {
+    if (statusText) statusText.innerText = msg;
+    if (statusDot) statusDot.classList.toggle('connected', color === '#00ff00');
+    // console.log(`[GUEST STATUS] ${msg}`);
+  }
+
+  // Visible "tap to play" overlay for when the browser blocks autoplay
+  // (common on mobile Safari/Chrome even with a muted video).
+  let playOverlay = null;
+  function showPlayOverlay() {
+    if (playOverlay || !remoteVideo || !remoteVideo.parentElement) return;
+    playOverlay = document.createElement('div');
+    playOverlay.textContent = '▶️ Tap to Play';
+    playOverlay.style.cssText = 'position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,0.6); color:#fff; font-size:1.3rem; font-weight:600; cursor:pointer; z-index:5;';
+    playOverlay.addEventListener('click', () => {
+      remoteVideo.muted = true;
+      remoteVideo.play().then(hidePlayOverlay).catch(err => {
+        console.error('❌ Manual play failed:', err);
+      });
+    });
+    remoteVideo.parentElement.style.position = remoteVideo.parentElement.style.position || 'relative';
+    remoteVideo.parentElement.appendChild(playOverlay);
+  }
+  function hidePlayOverlay() {
+    if (playOverlay) {
+      playOverlay.remove();
+      playOverlay = null;
+    }
+    updateStatus("Live! 🟢", "#00ff00");
+  }
+  function attemptPlay() {
+    if (!remoteVideo) return;
+    remoteVideo.play().then(hidePlayOverlay).catch(err => {
+      console.error("❌ Auto-play failed:", err);
+      updateStatus("Tap the video to start playback", "#ffaa00");
+      showPlayOverlay();
+    });
+  }
+
+  updateStatus("Connecting to Host...", "#ffff00");
+
+  // --- FIREBASE SETUP (Signaling) ---
+  const firebaseConfig = {
+    apiKey: "AIzaSyAqy5XvJKDUxdW7wp5tC2yxE_0hKXrJYvI",
+    authDomain: "raffle-draw-app-alph1tech.firebaseapp.com",
+    databaseURL: "https://raffle-draw-app-alph1tech-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "raffle-draw-app-alph1tech",
+    storageBucket: "raffle-draw-app-alph1tech.firebasestorage.app",
+    messagingSenderId: "422199484986",
+    appId: "1:422199484986:web:5619a9a670bffe246b0b03",
+    measurementId: "G-XCHPLNR2YD"
+  };
+
+  if (!firebase.apps.length) {
+    firebase.initializeApp(firebaseConfig);
+  }
+
+  const db = firebase.firestore();
+  const roomRef = db.collection('rooms').doc(roomId);
+
+  const ICE_SERVERS = [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:global.stun.twilio.com:3478' },
+    { urls: 'stun:stun.cloudflare.com:443' }
+  ];
+
+  // --- PEERJS LOGIC ---
+  // Guest calls the host's PeerJS ID with an empty (track-less) MediaStream,
+  // since we only want to *receive* video — no camera/mic, no audio at all.
+  // The host answers that call with its screen-share stream.
+
+  let guestPeer = null;
+  let currentCall = null;
+  let calledHostPeerId = null;
+
+  function callHost(hostPeerId) {
+    if (!guestPeer || calledHostPeerId === hostPeerId) return;
+    calledHostPeerId = hostPeerId;
+
+    if (currentCall) {
+      currentCall.close();
+      currentCall = null;
+    }
+
+    // console.log("📞 [PEERJS] Calling host:", hostPeerId);
+    updateStatus("Host is live — connecting...", "#ffff00");
+
+    // Create a dummy video track so PeerJS is happy and the browser properly negotiates a video transceiver.
+    // This fixes the 'undefined' error and ensures WebRTC correctly maps the host's video track in the answer.
+    const canvas = document.createElement('canvas');
+    canvas.width = 1; canvas.height = 1;
+    const dummyStream = canvas.captureStream(1);
+    const call = guestPeer.call(hostPeerId, dummyStream);
+    currentCall = call;
+
+    // PeerJS wraps a real RTCPeerConnection under the hood — inspect it directly
+    // so we can see whether ICE ever actually completes, same as we would with
+    // raw WebRTC. This is the same underlying mechanism, just signaled by PeerJS.
+    // (call.peerConnection is available immediately; MediaConnection has no
+    // reliable 'open' event to wait for.)
+    const attachIceDiagnostics = () => {
+      const pc = call.peerConnection;
+      if (!pc) {
+        setTimeout(attachIceDiagnostics, 200); // not set up yet, retry briefly
+        return;
+      }
+      pc.oniceconnectionstatechange = () => {
+        // console.log(`🔵 [PEERJS ICE State] ${pc.iceConnectionState}`);
+        if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
+          pc.getStats(null).then(stats => {
+            stats.forEach(report => {
+              if (report.type === 'candidate-pair' && report.state === 'succeeded') {
+                const local = stats.get(report.localCandidateId);
+                const remote = stats.get(report.remoteCandidateId);
+                // console.log('🟢 [PEERJS ICE] Selected pair — local:', local && local.candidateType, 'remote:', remote && remote.candidateType);
+              }
+            });
+          }).catch(() => {});
+        } else if (pc.iceConnectionState === 'failed') {
+          console.error('🔴 [PEERJS ICE] Connection failed — likely no working TURN relay for this network path.');
+        }
+      };
+      pc.onicecandidateerror = (e) => {
+        console.error('🔴 [PEERJS ICE ERROR]', e.errorCode, e.errorText, e.url);
+      };
+    };
+    attachIceDiagnostics();
+
+    call.on('stream', (remoteStream) => {
+      // console.log("🎥 [PEERJS] Remote stream received!", remoteStream);
+      updateStatus("Received Video Stream! Playing...", "#00ff00");
+      if (remoteVideo) {
+        remoteVideo.muted = true; // re-assert right before play(); some browsers reset this on srcObject change
+        remoteVideo.srcObject = remoteStream;
+        if (waitingMessage) waitingMessage.style.display = 'none';
+        attemptPlay();
+      }
+    });
+
+    call.on('close', () => {
+      // console.log("🔴 [PEERJS] Call closed by host");
+      updateStatus("Host stopped sharing", "#ffaa00");
+      if (remoteVideo) remoteVideo.srcObject = null;
+      if (waitingMessage) waitingMessage.style.display = 'block';
+      calledHostPeerId = null;
+    });
+
+    call.on('error', (err) => {
+      console.error("🔴 [PEERJS] Call error:", err);
+      updateStatus("Connection error — retrying...", "red");
+      calledHostPeerId = null;
+    });
+  }
+
+  function watchRoomForHost() {
+    roomRef.onSnapshot((snapshot) => {
+      const data = snapshot.data();
+      if (!data) return;
+
+      if (data.hostActive && data.hostPeerId) {
+        if (data.hostPeerId !== calledHostPeerId) {
+          callHost(data.hostPeerId);
+        }
+      } else {
+        // Host stopped sharing (or hasn't started yet)
+        updateStatus("Waiting for Host Screen Share...", "#ffff00");
+        if (currentCall) {
+          currentCall.close();
+          currentCall = null;
+        }
+        calledHostPeerId = null;
+        if (remoteVideo) remoteVideo.srcObject = null;
+        if (waitingMessage) waitingMessage.style.display = 'block';
+      }
+    }, (err) => {
+      console.error("❌ [GUEST] Room snapshot error:", err);
+    });
+  }
+
+  // --- INITIALIZATION ---
+
+  async function startGuestSession() {
+    try {
+      updateStatus("Connecting to Host...", "#ffff00");
+
+      guestPeer = new Peer({ config: { iceServers: ICE_SERVERS } });
+
+      guestPeer.on('open', (id) => {
+        // console.log("🟢 [PEERJS] Guest peer ready:", id);
+        updateStatus("Waiting for Host Screen Share...", "#ffff00");
+        watchRoomForHost();
+      });
+
+      guestPeer.on('error', (err) => {
+        console.error("🔴 [PEERJS] Peer error:", err);
+        updateStatus(`Connection error: ${err.type || err.message}`, "red");
+      });
+
+      guestPeer.on('disconnected', () => {
+        console.warn("⚠️ [PEERJS] Disconnected from signaling server, reconnecting...");
+        guestPeer.reconnect();
+      });
+
+    } catch (error) {
+      console.error("❌ [GUEST] Fatal Error:", error);
+      updateStatus(`Error: ${error.message}`, "red");
+    }
+  }
+
+  // --- LIVE FEEDBACK & SHOUTOUTS (shared with host, same room) ---
+
+  function escapeHTML(str) {
+    const div = document.createElement('div');
+    div.textContent = str == null ? '' : String(str);
+    return div.innerHTML;
+  }
+
+  function initFeedback() {
+    const feedbackList = document.getElementById('feedbackList');
+    const nicknameInput = document.getElementById('feedbackNickname');
+    const textInput = document.getElementById('feedbackText');
+    const sendBtn = document.getElementById('sendFeedbackBtn');
+
+    if (!feedbackList || !sendBtn) return; // markup not present, skip safely
+
+    let userId = localStorage.getItem('raffle_user_id') || ('anon_' + Math.random().toString(36).substr(2, 9));
+    localStorage.setItem('raffle_user_id', userId);
+
+    const savedNick = localStorage.getItem('raffle_nickname');
+    if (savedNick && nicknameInput) nicknameInput.value = savedNick;
+
+    // Same collection the host writes to: rooms/{roomId}/comments
+    const commentsRef = roomRef.collection('comments');
+    const commentsQuery = commentsRef.orderBy('timestamp', 'desc').limit(50);
+
+    commentsQuery.onSnapshot((snapshot) => {
+      feedbackList.innerHTML = '';
+      if (snapshot.empty) {
+        feedbackList.innerHTML = '<p style="opacity:0.6; text-align:center;">No comments yet. Be the first to say something!</p>';
+        return;
+      }
+      snapshot.forEach((doc) => {
+        const data = doc.data();
+        const item = document.createElement('div');
+        item.className = 'feedback-item';
+        item.innerHTML = `<div class="feedback-nickname">${escapeHTML(data.nickname)}</div><div class="feedback-text">${escapeHTML(data.text)}</div>`;
+        feedbackList.appendChild(item);
+      });
+    }, (error) => {
+      console.error('❌ [FEEDBACK] Snapshot error:', error);
+      feedbackList.innerHTML = '<p style="opacity:0.6; text-align:center;">Feedback unavailable right now.</p>';
+    });
+
+    let lastCommentTime = 0;
+    const COOLDOWN_MS = 10000;
+
+    sendBtn.addEventListener('click', () => {
+      let nickname = (nicknameInput && nicknameInput.value.trim()) || '';
+      const text = (textInput && textInput.value.trim()) || '';
+
+      if (!nickname) {
+        const anonCount = parseInt(localStorage.getItem('anon_comment_count') || '0') + 1;
+        nickname = `Anonymous-${anonCount}`;
+        localStorage.setItem('anon_comment_count', anonCount.toString());
+        if (nicknameInput) nicknameInput.value = nickname;
+      }
+
+      if (!text) return;
+
+      const now = Date.now();
+      if (now - lastCommentTime < COOLDOWN_MS) return;
+      lastCommentTime = now;
+
+      localStorage.setItem('raffle_nickname', nickname);
+      sendBtn.disabled = true;
+      setTimeout(() => { sendBtn.disabled = false; }, COOLDOWN_MS);
+
+      commentsRef.add({
+        text: text,
+        nickname: nickname,
+        userId: userId,
+        timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+        roomId: roomId,
+        type: 'room'
+      }).then(() => {
+        if (textInput) textInput.value = '';
+      }).catch((err) => {
+        console.error('❌ [FEEDBACK] Error posting comment:', err);
+      });
+    });
+  }
+
+  // Start the session
+  startGuestSession();
+  initFeedback();
+
+</script>
+</body>
+</html>

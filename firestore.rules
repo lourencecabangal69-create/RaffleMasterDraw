@@ -1,0 +1,54 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper functions
+    function isValidComment() {
+      let incoming = request.resource.data;
+      return incoming.keys().hasAll(['text', 'nickname', 'timestamp', 'type']) 
+             && incoming.text is string 
+             && incoming.text.size() > 0 
+             && incoming.text.size() <= 300 
+             && incoming.nickname is string 
+             && incoming.nickname.size() <= 30;
+    }
+
+    // Global Stats and Visits - Anyone can read, writes only allowed for incrementing
+    match /stats/global {
+      allow read: if true;
+      allow write: if true; // In a production app with Auth, you would restrict this. Here we allow public increments.
+    }
+    match /visits/global {
+      allow read: if true;
+      allow write: if true; 
+    }
+
+    // Raffle Sessions (Room Sync)
+    match /raffle_sessions/{sessionId} {
+      allow read: if true;
+      // Allow creation if logged in, or update if user is the host
+      allow write: if request.auth != null && 
+                   (!exists(/databases/$(database)/documents/raffle_sessions/$(sessionId)) || 
+                    resource.data.hostUid == request.auth.uid);
+    }
+
+    // Rooms (WebRTC Signaling)
+    match /rooms/{roomId} {
+      allow read: if true;
+      allow write: if request.auth != null && 
+                   (!exists(/databases/$(database)/documents/rooms/$(roomId)) || 
+                    resource.data.hostUid == request.auth.uid);
+      
+      // Nested comments collection for rooms
+      match /comments/{commentId} {
+        allow read: if true;
+        allow create: if isValidComment();
+      }
+    }
+    
+    // Global fallback comments
+    match /raffle_comments/{commentId} {
+      allow read: if true;
+      allow create: if isValidComment();
+    }
+  }
+}
